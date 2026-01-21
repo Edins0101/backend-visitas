@@ -19,5 +19,9 @@ class QRService:
 
         if marcar_usado:
             self.repo.mark_used(qr_id, ahora, usuario)
+            self.repo.db.commit()
+            message = "QR marcado como usado"
+        else:
+            message = "QR consultado"
 
-        return GeneralResponse(success=True, data={"qr_id": qr.qr_pk})
+        return GeneralResponse(success=True, message=message, data={"qr_id": qr.qr_pk})
