@@ -1,4 +1,7 @@
-easyocr>=1.7
-opencv-python-headless>=4.9
-pillow>=10.0
-numpy>=1.26
+easyocr==1.7.2
+opencv-python-headless==4.13.0.90
+pillow==12.1.0
+numpy==2.4.1
+scipy==1.17.0
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121

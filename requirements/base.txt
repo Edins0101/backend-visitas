@@ -1,26 +1,26 @@
 # API
-fastapi>=0.110
-uvicorn[standard]>=0.27
-python-multipart
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
+python-multipart==0.0.21
 
-# Validación / config
-pydantic>=2.6
-pydantic-settings>=2.2
+# Validacion / config
+pydantic==2.12.5
+pydantic-settings==2.12.0
 
 # DB (Postgres sync)
-sqlalchemy>=2.0
-psycopg[binary]>=3.1
-alembic>=1.13
+sqlalchemy==2.0.45
+psycopg[binary]==3.3.2
+alembic==1.18.1
 
-# Seguridad (hash, si manejas passwords/códigos)
-passlib[bcrypt]>=1.7
+# Seguridad (hash, si manejas passwords/codigos)
+passlib[bcrypt]==1.7.4
 
 # HTTP client (para consumir el endpoint de reconocimiento facial)
-httpx>=0.27
+httpx==0.28.1
 
 # Calidad / tests
-pytest>=8.0
-ruff>=0.3
+pytest==9.0.2
+ruff==0.14.13
 
 # Lectura de enviroments
-python-dotenv==1.0.1
+python-dotenv==1.2.1
