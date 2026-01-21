@@ -18,9 +18,9 @@ El proyecto se encarga de **leer, interpretar y validar códigos QR** para la ge
 - Extracción de un identificador (`qr_id`)
 - Validación del QR contra la base de datos
 - Gestión básica de visitantes
+- OCR
 
 ### ❌ Fuera de alcance
-- OCR avanzado
 - Reconocimiento facial
 - Llamadas telefónicas
 
@@ -58,7 +58,7 @@ app/
 
 ## ⚙️ Requisitos
 
-- Python 3.10 o superior
+- Python 3.11.9
 - PostgreSQL
 - pip
 
@@ -80,7 +80,8 @@ app/
 3. **Activar entorno virtual:**
    - **Windows:**
      ```bash
-     .venv\Scripts\activate
+     py -3.11 -m venv .venv
+      .\.venv\Scripts\Activate.ps1
      ```
    - **Linux / macOS:**
      ```bash
@@ -94,7 +95,7 @@ app/
      ```
    - OCR (opcional):
      ```bash
-     pip install -r requirements/ocr.txt
+     python -m pip install -r requirements/ocr.txt --extra-index-url https://download.pytorch.org/whl/cu121
      ```
 
 ---
@@ -105,6 +106,7 @@ Crear un archivo `.env` en la raíz del proyecto:
 
 ```env
 DATABASE_URL=postgresql+psycopg://usuario:password@localhost:5432/midb
+EASYOCR_GPU=true // Si tiene grafica
 ```
 
 > ⚠️ **Importante:** El archivo `.env` no debe subirse al repositorio
