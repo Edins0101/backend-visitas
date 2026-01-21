@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from app.application.dtos.responses.general_response import GeneralResponse, ErrorDTO
 from app.domain.errors import NotFoundError, BusinessRuleError
 from app.infrastructure.qr_repository import QRRepository
@@ -12,7 +12,8 @@ class QRService:
         if not qr:
             return GeneralResponse(success=False, error=ErrorDTO(code="NOT_FOUND", message="QR no existe"))
 
-        ahora = datetime.now(timezone.utc)
+        # Keep naive timestamps to match DB columns without timezone.
+        ahora = datetime.now()
         if not qr.es_vigente(ahora):
             return GeneralResponse(success=False, error=ErrorDTO(code="QR_INVALID", message="QR no vigente"))
 
