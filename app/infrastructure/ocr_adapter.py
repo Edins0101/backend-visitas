@@ -22,12 +22,12 @@ class EasyOcrAdapter(OcrPort):
         self._reader = None
         self._lock = threading.Lock()
 
-    def extract_text(self, image_bytes: bytes) -> OcrResult:
+    def extract_text(self, image_bytes: bytes, allowlist: str | None = None) -> OcrResult:
         image = _load_image(image_bytes)
         reader = self._get_reader()
         results = []
         for img in _iter_ocr_images(image, self.preprocess):
-            results.extend(reader.readtext(img, detail=1, paragraph=False))
+            results.extend(reader.readtext(img, detail=1, paragraph=False, allowlist=allowlist))
         results = _dedupe_results(results)
 
         lines: List[OcrLine] = []

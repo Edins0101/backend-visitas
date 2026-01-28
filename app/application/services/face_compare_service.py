@@ -10,6 +10,7 @@ class FaceCompareService:
         if not image_a or not image_b:
             return GeneralResponse(
                 success=False,
+                message="Imagen vacia",
                 error=ErrorDTO(code="EMPTY_IMAGE", message="Imagen vacia"),
             )
 
@@ -18,16 +19,26 @@ class FaceCompareService:
         except Exception as exc:
             return GeneralResponse(
                 success=False,
+                message="Fallo al comparar rostros",
                 error=ErrorDTO(code="FACE_COMPARE_ERROR", message="Fallo al comparar rostros", details={"error": str(exc)}),
             )
 
         if not result:
             return GeneralResponse(
                 success=False,
+                message="No se encontro rostro en alguna imagen",
                 error=ErrorDTO(code="FACE_NOT_FOUND", message="No se encontro rostro en alguna imagen"),
+            )
+
+        if isinstance(result, dict):
+            return GeneralResponse(
+                success=True,
+                message="Comparacion realizada",
+                data=result,
             )
 
         return GeneralResponse(
             success=True,
+            message="Comparacion realizada",
             data={"match": result.match, "distance": result.distance, "threshold": result.threshold},
         )

@@ -16,5 +16,5 @@ class OcrResult:
 
 
 class OcrPort(Protocol):
-    def extract_text(self, image_bytes: bytes) -> OcrResult:
+    def extract_text(self, image_bytes: bytes, allowlist: str | None = None) -> OcrResult:
         ...

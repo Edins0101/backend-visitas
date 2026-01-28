@@ -8,4 +8,4 @@ class CatalogoService:
 
     def obtener_villas_por_manzana(self) -> GeneralResponse[list[dict]]:
         data = self.repo.get_villas_por_manzana()
-        return GeneralResponse(success=True, data=data)
+        return GeneralResponse(success=True, message="Catalogo de viviendas", data=data)

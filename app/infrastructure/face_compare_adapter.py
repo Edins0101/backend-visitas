@@ -1,5 +1,7 @@
 import os
-from typing import Optional
+from typing import Optional, Any
+
+import httpx
 
 import cv2
 import numpy as np
@@ -25,6 +27,22 @@ class OpenCvFaceCompareAdapter(FaceComparePort):
         distance = float(1.0 - score)
         match = distance <= self.threshold
         return FaceMatchResult(match=match, distance=distance, threshold=self.threshold)
+
+
+class HttpFaceCompareAdapter(FaceComparePort):
+    def __init__(self, url: Optional[str] = None, timeout: Optional[float] = None):
+        self.url = url or os.getenv("FACE_COMPARE_URL", "http://35.197.70.0:8000/api/v1/validate")
+        env_timeout = os.getenv("FACE_COMPARE_TIMEOUT", "15")
+        self.timeout = timeout if timeout is not None else float(env_timeout)
+
+    def compare(self, image_a: bytes, image_b: bytes) -> Optional[Any]:
+        files = {
+            "foto_cedula": ("foto_cedula.jpg", image_a, "image/jpeg"),
+            "foto_rostro_vivo": ("foto_rostro_vivo.jpg", image_b, "image/jpeg"),
+        }
+        response = httpx.post(self.url, files=files, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
 
 
 def _get_face_crop(image_bytes: bytes, cascade) -> Optional[np.ndarray]:

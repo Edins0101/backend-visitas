@@ -10,12 +10,20 @@ class QRService:
     def validar_por_id(self, qr_id: int, marcar_usado: bool, usuario: str) -> GeneralResponse[dict]:
         qr = self.repo.get_by_id(qr_id)
         if not qr:
-            return GeneralResponse(success=False, error=ErrorDTO(code="NOT_FOUND", message="QR no existe"))
+            return GeneralResponse(
+                success=False,
+                message="QR no existe",
+                error=ErrorDTO(code="NOT_FOUND", message="QR no existe"),
+            )
 
         # Keep naive timestamps to match DB columns without timezone.
         ahora = datetime.now()
         if not qr.es_vigente(ahora):
-            return GeneralResponse(success=False, error=ErrorDTO(code="QR_INVALID", message="QR no vigente"))
+            return GeneralResponse(
+                success=False,
+                message="QR no vigente",
+                error=ErrorDTO(code="QR_INVALID", message="QR no vigente"),
+            )
 
         if marcar_usado:
             self.repo.mark_used(qr_id, ahora, usuario)

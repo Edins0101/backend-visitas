@@ -1,5 +1,6 @@
 from app.application.dtos.responses.general_response import GeneralResponse, ErrorDTO
 from app.domain.ecuador_id import extraer_cedula, extraer_nombres
+from app.domain.placa import extraer_placa, extraer_placa_en_lineas
 from app.domain.ocr import OcrPort
 
 
@@ -11,6 +12,7 @@ class OcrService:
         if not image_bytes:
             return GeneralResponse(
                 success=False,
+                message="Imagen vacia",
                 error=ErrorDTO(code="EMPTY_IMAGE", message="Imagen vacia"),
             )
 
@@ -19,11 +21,13 @@ class OcrService:
         except Exception as exc:
             return GeneralResponse(
                 success=False,
+                message="Fallo al procesar OCR",
                 error=ErrorDTO(code="OCR_ERROR", message="Fallo al procesar OCR", details={"error": str(exc)}),
             )
 
         return GeneralResponse(
             success=True,
+            message="OCR procesado",
             data={
                 "text": result.text,
                 "lines": [
@@ -37,6 +41,7 @@ class OcrService:
         if not image_bytes:
             return GeneralResponse(
                 success=False,
+                message="Imagen vacia",
                 error=ErrorDTO(code="EMPTY_IMAGE", message="Imagen vacia"),
             )
 
@@ -45,6 +50,7 @@ class OcrService:
         except Exception as exc:
             return GeneralResponse(
                 success=False,
+                message="Fallo al procesar OCR",
                 error=ErrorDTO(code="OCR_ERROR", message="Fallo al procesar OCR", details={"error": str(exc)}),
             )
 
@@ -57,17 +63,58 @@ class OcrService:
 
         if not cedula:
             return GeneralResponse(
-                success=False,
-                error=ErrorDTO(
-                    code="CEDULA_NOT_FOUND",
-                    message="No se encontro cedula valida",
-                    details={"es_cedula": False},
-                ),
+                success=True,
+                message="No es cedula ecuatoriana",
+                data={"cedula": None, "es_cedula": False, "nombres": None},
             )
 
         line_texts = [line.text for line in result.lines] or result.text.splitlines()
         nombres = extraer_nombres(line_texts)
         return GeneralResponse(
             success=True,
+            message="Cedula procesada",
             data={"cedula": cedula, "es_cedula": True, "nombres": nombres},
+        )
+
+    def extraer_placa(self, image_bytes: bytes) -> GeneralResponse[dict]:
+        if not image_bytes:
+            return GeneralResponse(
+                success=False,
+                message="Imagen vacia",
+                error=ErrorDTO(code="EMPTY_IMAGE", message="Imagen vacia"),
+            )
+
+        try:
+            result = self.port.extract_text(image_bytes, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+        except Exception as exc:
+            return GeneralResponse(
+                success=False,
+                message="Fallo al procesar OCR",
+                error=ErrorDTO(code="OCR_ERROR", message="Fallo al procesar OCR", details={"error": str(exc)}),
+            )
+
+        placa = None
+        best_conf = -1.0
+        for line in result.lines:
+            candidata = extraer_placa(line.text)
+            if candidata and line.confidence > best_conf:
+                best_conf = line.confidence
+                placa = candidata
+
+        if not placa:
+            placa = extraer_placa(result.text)
+        if not placa:
+            placa = extraer_placa_en_lineas([line.text for line in result.lines])
+
+        if not placa:
+            return GeneralResponse(
+                success=True,
+                message="No se encontro placa",
+                data={"placa": None},
+            )
+
+        return GeneralResponse(
+            success=True,
+            message="Placa procesada",
+            data={"placa": placa},
         )

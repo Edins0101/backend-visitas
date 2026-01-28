@@ -30,16 +30,35 @@ def _load_image(image_bytes: bytes) -> np.ndarray:
 
 
 def _detect_and_crop_face(image: np.ndarray, cascade) -> Optional[np.ndarray]:
+    primary = _detect_on_image(image, cascade)
+    if primary is not None:
+        return primary
+
     best_crop = None
     best_area = 0
     for rotated in _iter_rotations(image):
+        if rotated is image:
+            continue
         gray = cv2.cvtColor(rotated, cv2.COLOR_RGB2GRAY)
         faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
         for (x, y, w, h) in faces:
             area = w * h
             if area > best_area:
                 best_area = area
-                best_crop = _crop_with_margin(rotated, x, y, w, h, 0.2)
+                best_crop = _crop_with_margin(rotated, x, y, w, h, 0.35)
+    return best_crop
+
+
+def _detect_on_image(image: np.ndarray, cascade) -> Optional[np.ndarray]:
+    best_crop = None
+    best_area = 0
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+    for (x, y, w, h) in faces:
+        area = w * h
+        if area > best_area:
+            best_area = area
+            best_crop = _crop_with_margin(image, x, y, w, h, 0.35)
     return best_crop
 
 
