@@ -16,5 +16,10 @@ class OcrResult:
 
 
 class OcrPort(Protocol):
-    def extract_text(self, image_bytes: bytes, allowlist: str | None = None) -> OcrResult:
+    def extract_text(
+        self,
+        image_bytes: bytes,
+        allowlist: str | None = None,
+        preprocess_mode: str | None = None,
+    ) -> OcrResult:
         ...

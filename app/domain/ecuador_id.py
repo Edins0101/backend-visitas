@@ -1,5 +1,5 @@
 import unicodedata
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 
 def validar_cedula(cedula: str) -> bool:
@@ -36,6 +36,16 @@ def extraer_cedula(texto: str) -> Optional[str]:
         candidato = digits[i : i + 10]
         if validar_cedula(candidato):
             return candidato
+    return None
+
+
+def extraer_cedula_etiquetada(lineas: List[str]) -> Optional[str]:
+    normalizadas = [_normalizar(linea) for linea in lineas]
+    for linea in normalizadas:
+        if "NUI" in linea or "DOCUMENTO" in linea or "DOC." in linea:
+            cedula = extraer_cedula(linea)
+            if cedula:
+                return cedula
     return None
 
 

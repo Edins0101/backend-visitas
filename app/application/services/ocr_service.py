@@ -1,5 +1,5 @@
 from app.application.dtos.responses.general_response import GeneralResponse, ErrorDTO
-from app.domain.ecuador_id import extraer_cedula, extraer_nombres
+from app.domain.ecuador_id import extraer_cedula, extraer_cedula_etiquetada, extraer_nombres
 from app.domain.placa import extraer_placa, extraer_placa_en_lineas
 from app.domain.ocr import OcrPort
 
@@ -46,7 +46,14 @@ class OcrService:
             )
 
         try:
-            result = self.port.extract_text(image_bytes)
+            # Full OCR for names and labels
+            result = self.port.extract_text(image_bytes, preprocess_mode="document")
+            # Digits-only OCR to improve cedula detection
+            digits_result = self.port.extract_text(
+                image_bytes,
+                allowlist="0123456789",
+                preprocess_mode="document",
+            )
         except Exception as exc:
             return GeneralResponse(
                 success=False,
@@ -54,12 +61,17 @@ class OcrService:
                 error=ErrorDTO(code="OCR_ERROR", message="Fallo al procesar OCR", details={"error": str(exc)}),
             )
 
-        cedula = extraer_cedula(result.text)
+        line_texts = [line.text for line in result.lines] or result.text.splitlines()
+        cedula = extraer_cedula_etiquetada(line_texts)
         if not cedula:
-            for line in result.lines:
+            cedula = extraer_cedula(digits_result.text)
+        if not cedula:
+            for line in digits_result.lines:
                 cedula = extraer_cedula(line.text)
                 if cedula:
                     break
+        if not cedula:
+            cedula = extraer_cedula(result.text)
 
         if not cedula:
             return GeneralResponse(
@@ -68,7 +80,6 @@ class OcrService:
                 data={"cedula": None, "es_cedula": False, "nombres": None},
             )
 
-        line_texts = [line.text for line in result.lines] or result.text.splitlines()
         nombres = extraer_nombres(line_texts)
         return GeneralResponse(
             success=True,
