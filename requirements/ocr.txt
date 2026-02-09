@@ -5,3 +5,5 @@ numpy==2.4.1
 scipy==1.17.0
 torch==2.5.1+cu121
 torchvision==0.20.1+cu121
+paddleocr>=2.7
+paddlepaddle>=2.6

@@ -21,5 +21,7 @@ class OcrPort(Protocol):
         image_bytes: bytes,
         allowlist: str | None = None,
         preprocess_mode: str | None = None,
+        roi: tuple[float, float, float, float] | None = None,
+        binarize: bool = False,
     ) -> OcrResult:
         ...

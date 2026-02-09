@@ -1,7 +1,8 @@
 import base64
 import binascii
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.application.dtos.responses.general_response import GeneralResponse, ErrorDTO
@@ -11,15 +12,17 @@ from app.application.services.ocr_service import OcrService
 from app.infrastructure.face_compare_adapter import OpenCvFaceCompareAdapter, HttpFaceCompareAdapter
 from app.infrastructure.face_adapter import OpenCvFaceAdapter
 from app.infrastructure.ocr_adapter import EasyOcrAdapter
+from app.infrastructure.paddle_ocr_adapter import PaddleOcrAdapter
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
-_adapter = EasyOcrAdapter()
+_adapter = PaddleOcrAdapter()
+_fallback_adapter = EasyOcrAdapter()
 _face_adapter = OpenCvFaceAdapter()
 _face_compare_adapter = HttpFaceCompareAdapter()
 
 
 def get_ocr_service() -> OcrService:
-    return OcrService(port=_adapter)
+    return OcrService(port=_adapter, fallback_port=_fallback_adapter)
 
 
 def get_face_service() -> FaceService:
@@ -54,16 +57,17 @@ async def extract_cedula(
     face_service: FaceService = Depends(get_face_service),
 ):
     if file.content_type not in {"image/jpeg", "image/png"}:
-        return GeneralResponse(
+        response = GeneralResponse(
             success=False,
             message="Solo se permiten imagenes JPG o PNG",
             error=ErrorDTO(code="UNSUPPORTED_MEDIA", message="Solo se permiten imagenes JPG o PNG"),
         )
+        return JSONResponse(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, content=response.model_dump())
 
     image_bytes = await file.read()
     ocr_response = service.extraer_cedula(image_bytes)
     if not ocr_response.success:
-        return ocr_response
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=ocr_response.model_dump())
 
     data = ocr_response.data or {}
     if not data.get("es_cedula"):
@@ -73,7 +77,7 @@ async def extract_cedula(
 
     face_response = face_service.extraer_rostro(image_bytes)
     if not face_response.success:
-        return face_response
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=face_response.model_dump())
 
     face_data = face_response.data or {}
     data["foto_base64"] = face_data.get("image_base64")
@@ -84,27 +88,35 @@ async def extract_cedula(
 @router.post("/placa")
 async def extract_placa(file: UploadFile = File(...), service: OcrService = Depends(get_ocr_service)):
     if file.content_type not in {"image/jpeg", "image/png"}:
-        return GeneralResponse(
+        response = GeneralResponse(
             success=False,
             message="Solo se permiten imagenes JPG o PNG",
             error=ErrorDTO(code="UNSUPPORTED_MEDIA", message="Solo se permiten imagenes JPG o PNG"),
         )
+        return JSONResponse(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, content=response.model_dump())
 
     image_bytes = await file.read()
-    return service.extraer_placa(image_bytes)
+    response = service.extraer_placa(image_bytes)
+    if response.success:
+        return response
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=response.model_dump())
 
 
 @router.post("/foto")
 async def extract_foto(file: UploadFile = File(...), service: FaceService = Depends(get_face_service)):
     if file.content_type not in {"image/jpeg", "image/png"}:
-        return GeneralResponse(
+        response = GeneralResponse(
             success=False,
             message="Solo se permiten imagenes JPG o PNG",
             error=ErrorDTO(code="UNSUPPORTED_MEDIA", message="Solo se permiten imagenes JPG o PNG"),
         )
+        return JSONResponse(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, content=response.model_dump())
 
     image_bytes = await file.read()
-    return service.extraer_rostro(image_bytes)
+    response = service.extraer_rostro(image_bytes)
+    if response.success:
+        return response
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=response.model_dump())
 
 
 @router.post("/face-compare")
@@ -116,13 +128,17 @@ async def compare_faces(
         image_a = _decode_base64(payload.foto_cedula_base64)
         image_b = _decode_base64(payload.foto_rostro_vivo_base64)
     except ValueError:
-        return GeneralResponse(
+        response = GeneralResponse(
             success=False,
             message="Base64 invalido",
             error=ErrorDTO(code="INVALID_BASE64", message="Base64 invalido"),
         )
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=response.model_dump())
 
-    return service.comparar(image_a, image_b)
+    response = service.comparar(image_a, image_b)
+    if response.success:
+        return response
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=response.model_dump())
 
 
 def _decode_base64(value: str) -> bytes:

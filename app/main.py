@@ -1,4 +1,12 @@
+import os
 from dotenv import load_dotenv
+
+# Ensure Paddle uses legacy executor (avoid oneDNN/PIR crashes on some Windows builds)
+os.environ.setdefault("FLAGS_use_onednn", "0")
+os.environ.setdefault("FLAGS_enable_onednn", "0")
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+os.environ.setdefault("FLAGS_enable_pir_api", "0")
+
 load_dotenv()
 
 from fastapi import FastAPI

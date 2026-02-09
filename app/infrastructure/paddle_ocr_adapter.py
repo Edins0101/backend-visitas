@@ -1,26 +1,32 @@
-import io
 import os
 import threading
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
-import easyocr
-import numpy as np
 import cv2
-from PIL import Image
+import numpy as np
 
 from app.domain.ocr import OcrPort, OcrResult, OcrLine
 
+os.environ.setdefault("FLAGS_use_onednn", "0")
+os.environ.setdefault("FLAGS_enable_onednn", "0")
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+os.environ.setdefault("FLAGS_enable_pir_api", "0")
 
-class EasyOcrAdapter(OcrPort):
-    def __init__(self, languages: Optional[List[str]] = None, gpu: Optional[bool] = None):
-        env_langs = os.getenv("EASYOCR_LANGS", "es,en")
-        self.languages = languages or [lang.strip() for lang in env_langs.split(",") if lang.strip()]
-        env_gpu = os.getenv("EASYOCR_GPU", "false").lower()
-        self.gpu = gpu if gpu is not None else env_gpu in {"1", "true", "yes"}
-        env_pre = os.getenv("EASYOCR_PREPROCESS", "true").lower()
-        self.preprocess = env_pre in {"1", "true", "yes"}
-        self._reader = None
+
+class PaddleOcrAdapter(OcrPort):
+    def __init__(
+        self,
+        lang: Optional[str] = None,
+        use_gpu: Optional[bool] = None,
+        use_angle_cls: Optional[bool] = None,
+    ):
+        self.lang = lang or os.getenv("PADDLE_OCR_LANG", "es")
+        env_gpu = os.getenv("PADDLE_OCR_GPU", "false").lower()
+        self.use_gpu = use_gpu if use_gpu is not None else env_gpu in {"1", "true", "yes"}
+        env_angle = os.getenv("PADDLE_OCR_ANGLE", "true").lower()
+        self.use_angle_cls = use_angle_cls if use_angle_cls is not None else env_angle in {"1", "true", "yes"}
+        self._ocr = None
         self._lock = threading.Lock()
 
     def extract_text(
@@ -31,7 +37,7 @@ class EasyOcrAdapter(OcrPort):
         roi: tuple[float, float, float, float] | None = None,
         binarize: bool = False,
     ) -> OcrResult:
-        image = _load_image(image_bytes)
+        image = _load_image_bgr(image_bytes)
         _debug_dump(image, "input")
         if preprocess_mode == "document":
             image = _normalize_document(image)
@@ -44,52 +50,61 @@ class EasyOcrAdapter(OcrPort):
         if binarize:
             image = _binarize_strong(image)
             _debug_dump(image, "binarized")
-        reader = self._get_reader()
-        results = []
-        for img in _iter_ocr_images(image, self.preprocess):
-            results.extend(reader.readtext(img, detail=1, paragraph=False, allowlist=allowlist))
-        results = _dedupe_results(results)
 
-        lines: List[OcrLine] = []
-        texts: List[str] = []
-        for bbox, text, conf in results:
-            norm_bbox = [[float(p[0]), float(p[1])] for p in bbox]
-            lines.append(OcrLine(text=text, confidence=float(conf), bbox=norm_bbox))
+        ocr = self._get_ocr()
+        try:
+            result = ocr.ocr(image, cls=self.use_angle_cls)
+        except TypeError:
+            # Older versions may not accept cls parameter
+            result = ocr.ocr(image)
+
+        lines = []
+        texts = []
+        for line in result[0] if result else []:
+            bbox, (text, conf) = line
+            text = _apply_allowlist(text, allowlist)
+            if not text:
+                continue
+            lines.append(OcrLine(text=text, confidence=float(conf), bbox=bbox))
             texts.append(text)
 
-        full_text = "\n".join(texts).strip()
-        return OcrResult(text=full_text, lines=lines)
+        return OcrResult(text="\n".join(texts).strip(), lines=lines)
 
-    def _get_reader(self) -> easyocr.Reader:
-        if self._reader is None:
+    def _get_ocr(self):
+        if self._ocr is None:
             with self._lock:
-                if self._reader is None:
-                    self._reader = easyocr.Reader(self.languages, gpu=self.gpu)
-        return self._reader
+                if self._ocr is None:
+                    from inspect import signature
+                    from paddleocr import PaddleOCR
+
+                    kwargs = {
+                        "use_angle_cls": self.use_angle_cls,
+                        "lang": self.lang,
+                        "use_gpu": self.use_gpu,
+                    }
+                    params = signature(PaddleOCR.__init__).parameters
+                    filtered = {k: v for k, v in kwargs.items() if k in params}
+                    self._ocr = PaddleOCR(**filtered)
+        return self._ocr
 
 
-def _load_image(image_bytes: bytes) -> np.ndarray:
-    with Image.open(io.BytesIO(image_bytes)) as image:
-        return np.array(image.convert("RGB"))
+def _apply_allowlist(text: str, allowlist: Optional[str]) -> str:
+    if not allowlist:
+        return text
+    allowed = set(allowlist)
+    return "".join(ch for ch in text if ch in allowed)
 
 
-def _iter_ocr_images(image: np.ndarray, preprocess: bool):
-    yield image
-    if not preprocess:
-        return
-    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
-    denoised = cv2.bilateralFilter(enhanced, 7, 50, 50)
-    yield denoised
-    thresh = cv2.adaptiveThreshold(
-        denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 35, 12
-    )
-    yield thresh
+def _load_image_bgr(image_bytes: bytes) -> np.ndarray:
+    data = np.frombuffer(image_bytes, dtype=np.uint8)
+    image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    if image is None:
+        return image
+    return image
 
 
 def _normalize_document(image: np.ndarray) -> np.ndarray:
-    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     edges = cv2.Canny(blur, 50, 150)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -174,12 +189,12 @@ def _upscale_if_needed(image: np.ndarray) -> np.ndarray:
 
 
 def _binarize_strong(image: np.ndarray) -> np.ndarray:
-    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (3, 3), 0)
     thr = cv2.adaptiveThreshold(
         blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 41, 6
     )
-    return cv2.cvtColor(thr, cv2.COLOR_GRAY2RGB)
+    return cv2.cvtColor(thr, cv2.COLOR_GRAY2BGR)
 
 
 def _debug_dump(image: np.ndarray, label: str) -> None:
@@ -190,18 +205,6 @@ def _debug_dump(image: np.ndarray, label: str) -> None:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     path = os.path.join(out_dir, f"{ts}_{label}.jpg")
     try:
-        cv2.imwrite(path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(path, image)
     except Exception:
         pass
-
-
-def _dedupe_results(results):
-    merged = {}
-    for bbox, text, conf in results:
-        key = text.strip()
-        if not key:
-            continue
-        current = merged.get(key)
-        if current is None or conf > current[2]:
-            merged[key] = (bbox, key, conf)
-    return list(merged.values())

@@ -1,3 +1,4 @@
+import re
 import unicodedata
 from typing import Optional, List, Tuple
 
@@ -39,13 +40,31 @@ def extraer_cedula(texto: str) -> Optional[str]:
     return None
 
 
+def extraer_cedula_patron(texto: str) -> Optional[str]:
+    # Prefer patterns with a visible separator (e.g., 095155304-9)
+    for match in re.finditer(r"(\d{9})\D{1,3}(\d)", texto):
+        candidato = match.group(1) + match.group(2)
+        if validar_cedula(candidato):
+            return candidato
+    # Fallback to contiguous 10 digits in the raw text
+    for match in re.finditer(r"(\d{10})", texto):
+        candidato = match.group(1)
+        if validar_cedula(candidato):
+            return candidato
+    return None
+
+
 def extraer_cedula_etiquetada(lineas: List[str]) -> Optional[str]:
     normalizadas = [_normalizar(linea) for linea in lineas]
-    for linea in normalizadas:
-        if "NUI" in linea or "DOCUMENTO" in linea or "DOC." in linea:
+    for idx, linea in enumerate(normalizadas):
+        if _linea_tiene_etiqueta(linea):
             cedula = extraer_cedula(linea)
             if cedula:
                 return cedula
+            for siguiente in normalizadas[idx + 1 : idx + 3]:
+                cedula = extraer_cedula(siguiente)
+                if cedula:
+                    return cedula
     return None
 
 
@@ -57,8 +76,18 @@ def extraer_nombres(lineas: List[str]) -> Optional[str]:
             if nombre_en_linea:
                 return _limpiar_nombres(nombre_en_linea)
             return _limpiar_nombres(_colectar_nombres(normalizadas, idx + 1))
-        if "APELLIDOS" in linea or "NOMBRES" in linea:
-            posible = _colectar_nombres(normalizadas, idx + 1)
+        if "APELLIDOS" in linea:
+            apellidos = _colectar_hasta(normalizadas, idx + 1, {"NOMBRES"})
+            nombres = None
+            for j in range(idx + 1, min(len(normalizadas), idx + 6)):
+                if "NOMBRES" in normalizadas[j]:
+                    nombres = _colectar_hasta(normalizadas, j + 1, _PALABRAS_CORTE)
+                    break
+            combinado = " ".join([p for p in [apellidos, nombres] if p])
+            if combinado:
+                return _limpiar_nombres(combinado)
+        if "NOMBRES" in linea:
+            posible = _colectar_hasta(normalizadas, idx + 1, _PALABRAS_CORTE)
             if posible:
                 return _limpiar_nombres(posible)
     return None
@@ -67,6 +96,20 @@ def extraer_nombres(lineas: List[str]) -> Optional[str]:
 def _colectar_nombres(normalizadas: List[str], start: int) -> Optional[str]:
     nombres = []
     for linea in normalizadas[start : start + 3]:
+        if _es_linea_nombre(linea):
+            nombres.append(linea.strip())
+        elif nombres:
+            break
+    if nombres:
+        return " ".join(nombres)
+    return None
+
+
+def _colectar_hasta(normalizadas: List[str], start: int, cortes: set[str]) -> Optional[str]:
+    nombres = []
+    for linea in normalizadas[start:]:
+        if any(palabra in linea for palabra in cortes):
+            break
         if _es_linea_nombre(linea):
             nombres.append(linea.strip())
         elif nombres:
@@ -100,6 +143,24 @@ def _normalizar(texto: str) -> str:
     texto = unicodedata.normalize("NFD", texto)
     texto = "".join(ch for ch in texto if unicodedata.category(ch) != "Mn")
     return texto.upper()
+
+
+def _linea_tiene_etiqueta(linea: str) -> bool:
+    if not linea:
+        return False
+    tokens = []
+    token = []
+    for ch in linea:
+        if ch.isalnum():
+            token.append(ch)
+        else:
+            if token:
+                tokens.append("".join(token))
+                token = []
+    if token:
+        tokens.append("".join(token))
+    etiquetas = {"NUI", "DOCUMENTO", "DOC", "NO", "NRO", "NUM", "NUMERO"}
+    return any(t in etiquetas for t in tokens)
 
 
 _PALABRAS_CORTE = {
