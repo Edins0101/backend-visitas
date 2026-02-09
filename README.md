@@ -22,7 +22,6 @@ El proyecto se encarga de **leer, interpretar y validar códigos QR** para la ge
 
 ### ❌ Fuera de alcance
 - Reconocimiento facial
-- Llamadas telefónicas
 
 ---
 
@@ -166,7 +165,7 @@ pytest
 - El QR no contiene información sensible y actúa solo como identificador
 - La validación real ocurre en la base de datos
 - El reconocimiento facial es un servicio externo
-- El módulo de llamadas telefónicas no está implementado
+- El módulo de llamadas telefónicas se ejecuta dentro del backend (FastAPI)
 
 ---
 
@@ -177,6 +176,42 @@ pytest
 - PostgreSQL
 - Pydantic
 - Uvicorn
+
+---
+
+## Twilio (llamadas)
+
+El backend incluye endpoints para realizar llamadas con Twilio.
+
+### Variables de entorno
+
+Agregar en `.env`:
+
+```env
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_PHONE_NUMBER=+15551234567
+BASE_URL=https://your-public-url.example.com
+```
+
+`BASE_URL` debe ser un URL publico accesible por Twilio (por ejemplo usando ngrok).
+
+### Endpoints
+
+- `POST /api/call`
+- `POST /twilio/voice`
+- `POST /twilio/voice/handle-input`
+
+Body ejemplo:
+
+```json
+{
+  "to": "+593979684121",
+  "residentName": "Juan Perez",
+  "visitorName": "Carlos Lopez",
+  "plate": "ABC-1234"
+}
+```
 
 ---
 

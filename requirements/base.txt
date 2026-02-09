@@ -18,6 +18,9 @@ passlib[bcrypt]==1.7.4
 # HTTP client (para consumir el endpoint de reconocimiento facial)
 httpx==0.28.1
 
+# Twilio (llamadas)
+twilio==9.3.5
+
 # Calidad / tests
 pytest==9.0.2
 ruff==0.14.13

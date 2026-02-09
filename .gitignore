@@ -59,6 +59,15 @@ dist/
 *.egg-info/
 
 # ===============================
+# Node.js
+# ===============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===============================
 # Alembic
 # ===============================
 alembic/versions/*.pyc
