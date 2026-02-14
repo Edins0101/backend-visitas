@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from app.application.dtos.responses.general_response import ErrorDTO, GeneralResponse
-from app.domain.twilio import CallProviderPort, TwimlBuilderPort
+from app.domain.twilio import AccessDecisionNotifierPort, CallProviderPort, TwimlBuilderPort
 
 
 @dataclass
@@ -15,13 +15,24 @@ class TwilioConfig:
 
 
 class TwilioService:
-    def __init__(self, call_port: CallProviderPort, twiml_port: TwimlBuilderPort, config: TwilioConfig):
+    def __init__(
+        self,
+        call_port: CallProviderPort,
+        twiml_port: TwimlBuilderPort,
+        notifier_port: AccessDecisionNotifierPort,
+        config: TwilioConfig,
+    ):
         self._call_port = call_port
         self._twiml_port = twiml_port
+        self._notifier_port = notifier_port
         self._config = config
 
     @staticmethod
-    def from_env(call_port: CallProviderPort, twiml_port: TwimlBuilderPort) -> "TwilioService":
+    def from_env(
+        call_port: CallProviderPort,
+        twiml_port: TwimlBuilderPort,
+        notifier_port: AccessDecisionNotifierPort,
+    ) -> "TwilioService":
         def _get_env(name: str) -> str | None:
             value = os.getenv(name)
             return value.strip() if value else None
@@ -32,7 +43,12 @@ class TwilioService:
             phone_number=_get_env("TWILIO_PHONE_NUMBER"),
             base_url=_get_env("BASE_URL"),
         )
-        return TwilioService(call_port=call_port, twiml_port=twiml_port, config=config)
+        return TwilioService(
+            call_port=call_port,
+            twiml_port=twiml_port,
+            notifier_port=notifier_port,
+            config=config,
+        )
 
     def start_call(
         self,
@@ -113,10 +129,52 @@ class TwilioService:
         visitor_name: str | None,
         plate: str | None,
     ) -> str:
+        normalized_digit = digit or ""
+        normalized_resident = resident_name or ""
+        normalized_visitor = visitor_name or ""
+        normalized_plate = plate or ""
+
+        if normalized_digit == "1":
+            self._notify_decision_safe(
+                decision="authorized",
+                resident_name=normalized_resident,
+                visitor_name=normalized_visitor,
+                plate=normalized_plate,
+                digit=normalized_digit,
+            )
+        elif normalized_digit == "2":
+            self._notify_decision_safe(
+                decision="rejected",
+                resident_name=normalized_resident,
+                visitor_name=normalized_visitor,
+                plate=normalized_plate,
+                digit=normalized_digit,
+            )
+
         return self._twiml_port.build_handle_input(
-            digit or "",
-            resident_name or "",
-            visitor_name or "",
-            plate or "",
+            normalized_digit,
+            normalized_resident,
+            normalized_visitor,
+            normalized_plate,
             self._config.base_url,
         )
+
+    def _notify_decision_safe(
+        self,
+        decision: str,
+        resident_name: str,
+        visitor_name: str,
+        plate: str,
+        digit: str,
+    ) -> None:
+        try:
+            self._notifier_port.notify_decision(
+                decision=decision,
+                resident_name=resident_name,
+                visitor_name=visitor_name,
+                plate=plate,
+                digit=digit,
+            )
+        except Exception as exc:
+            # Twilio flow must continue even if backend notification fails.
+            print(f"[TwilioService] decision webhook failed: {exc}")

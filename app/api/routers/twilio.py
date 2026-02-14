@@ -6,6 +6,7 @@ from fastapi.responses import Response, JSONResponse
 from app.application.dtos.requests.twilio_call_request import TwilioCallRequestDTO
 from app.application.services.twilio_service import TwilioService
 from app.infrastructure.twilio_call_adapter import TwilioCallAdapter
+from app.infrastructure.twilio_decision_notifier_adapter import WebhookAccessDecisionNotifierAdapter
 from app.infrastructure.twilio_twiml_adapter import TwilioTwimlAdapter
 
 router = APIRouter(tags=["Twilio"])
@@ -18,6 +19,9 @@ def _get_service() -> TwilioService:
             auth_token=os.getenv("TWILIO_AUTH_TOKEN", ""),
         ),
         twiml_port=TwilioTwimlAdapter(),
+        notifier_port=WebhookAccessDecisionNotifierAdapter(
+            webhook_url=os.getenv("TWILIO_DECISION_WEBHOOK_URL"),
+        ),
     )
     return service
 

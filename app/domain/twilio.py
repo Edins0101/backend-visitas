@@ -25,3 +25,15 @@ class TwimlBuilderPort(Protocol):
         base_url: str | None,
     ) -> str:
         ...
+
+
+class AccessDecisionNotifierPort(Protocol):
+    def notify_decision(
+        self,
+        decision: str,
+        resident_name: str,
+        visitor_name: str,
+        plate: str,
+        digit: str,
+    ) -> None:
+        ...

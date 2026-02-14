@@ -192,9 +192,11 @@ TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+15551234567
 BASE_URL=https://your-public-url.example.com
+TWILIO_DECISION_WEBHOOK_URL=https://tu-backend-principal.example.com/api/visitas/decision
 ```
 
 `BASE_URL` debe ser un URL publico accesible por Twilio (por ejemplo usando ngrok).
+`TWILIO_DECISION_WEBHOOK_URL` es opcional, y se usa para notificar `authorized/rejected` cuando el residente marca 1 o 2.
 
 ### Endpoints
 
