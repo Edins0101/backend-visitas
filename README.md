@@ -197,23 +197,30 @@ TWILIO_DECISION_WEBHOOK_URL=https://tu-backend-principal.example.com/api/visitas
 
 `BASE_URL` debe ser un URL publico accesible por Twilio (por ejemplo usando ngrok).
 `TWILIO_DECISION_WEBHOOK_URL` es opcional, y se usa para notificar `authorized/rejected` cuando el residente marca 1 o 2.
+Si no se configura, la llamada IVR responde por voz pero no envia ninguna decision a otro backend.
 
 ### Endpoints
 
 - `POST /api/call`
-- `POST /twilio/voice`
-- `POST /twilio/voice/handle-input`
+- `GET|POST /twilio/voice`
+- `GET|POST /twilio/voice/handle-input`
+- `POST /twilio/voice/status`
+- `GET /api/call/{call_sid}/status`
+- `GET /api/visit/{visit_id}/status`
 
 Body ejemplo:
 
 ```json
 {
   "to": "+593979684121",
+  "visitId": "visita-123",
   "residentName": "Juan Perez",
   "visitorName": "Carlos Lopez",
   "plate": "ABC-1234"
 }
 ```
+
+`visitId` es opcional. Si no se envia, el backend genera uno automaticamente.
 
 ---
 
