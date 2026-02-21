@@ -6,7 +6,7 @@ import httpx
 import cv2
 import numpy as np
 
-from app.domain.face import FaceComparePort, FaceMatchResult
+from app.domain.face import FaceComparePort, FaceMatchResult, FaceCompareProviderError
 
 
 class OpenCvFaceCompareAdapter(FaceComparePort):
@@ -41,7 +41,12 @@ class HttpFaceCompareAdapter(FaceComparePort):
             "foto_rostro_vivo": ("foto_rostro_vivo.jpg", image_b, "image/jpeg"),
         }
         response = httpx.post(self.url, files=files, timeout=self.timeout)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code if exc.response else 0
+            provider_body = exc.response.text if exc.response else ""
+            raise FaceCompareProviderError(status_code=status_code, response_body=provider_body) from exc
         return response.json()
 
 

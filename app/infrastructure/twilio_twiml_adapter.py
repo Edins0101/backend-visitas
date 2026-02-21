@@ -11,6 +11,7 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
         resident_name: str,
         visitor_name: str,
         plate: str,
+        visit_id: str,
         base_url: str | None,
     ) -> str:
         twiml = VoiceResponse()
@@ -28,13 +29,30 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
             "Si desea escuchar nuevamente la informacion, presione 3."
         )
 
-        qs = urlencode({"residentName": name, "visitorName": visitor_name or "", "plate": plate or ""})
+        qs = urlencode(
+            {
+                "residentName": name,
+                "visitorName": visitor_name or "",
+                "plate": plate or "",
+                "visitId": visit_id,
+            }
+        )
         action_url = self._join_url(base_url, "/twilio/voice/handle-input", qs)
-        redirect_url = self._join_url(base_url, "/twilio/voice", qs)
 
-        gather = twiml.gather(numDigits=1, action=action_url, method="POST")
+        gather = twiml.gather(
+            input="dtmf",
+            num_digits=1,
+            timeout=8,
+            action=action_url,
+            method="POST",
+        )
         gather.say(info_message, voice="alice", language="es-ES")
-        twiml.redirect(redirect_url)
+        twiml.say(
+            "No se recibio ninguna opcion. Finalizando la llamada.",
+            voice="alice",
+            language="es-ES",
+        )
+        twiml.hangup()
 
         return str(twiml)
 
@@ -44,12 +62,18 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
         resident_name: str,
         visitor_name: str,
         plate: str,
+        visit_id: str,
         base_url: str | None,
     ) -> str:
         twiml = VoiceResponse()
 
         qs = urlencode(
-            {"residentName": resident_name or "", "visitorName": visitor_name or "", "plate": plate or ""}
+            {
+                "residentName": resident_name or "",
+                "visitorName": visitor_name or "",
+                "plate": plate or "",
+                "visitId": visit_id,
+            }
         )
         redirect_url = self._join_url(base_url, "/twilio/voice", qs)
 
@@ -76,16 +100,17 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
             twiml.redirect(redirect_url)
         else:
             twiml.say(
-                "Opcion no valida. Por favor intente nuevamente.",
+                "Opcion no valida. Finalizando la llamada.",
                 voice="alice",
                 language="es-ES",
             )
-            twiml.redirect(redirect_url)
+            twiml.hangup()
 
         return str(twiml)
 
     @staticmethod
     def _join_url(base_url: str | None, path: str, qs: str) -> str:
         if base_url:
-            return f"{base_url}{path}?{qs}"
-        return f"{path}?{qs}"
+            normalized_base_url = base_url.rstrip("/")
+            return f"{normalized_base_url}{path}?{qs}" if qs else f"{normalized_base_url}{path}"
+        return f"{path}?{qs}" if qs else path

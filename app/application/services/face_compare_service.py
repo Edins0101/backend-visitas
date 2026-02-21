@@ -1,5 +1,5 @@
 from app.application.dtos.responses.general_response import GeneralResponse, ErrorDTO
-from app.domain.face import FaceComparePort
+from app.domain.face import FaceComparePort, FaceCompareProviderError
 
 
 class FaceCompareService:
@@ -16,6 +16,19 @@ class FaceCompareService:
 
         try:
             result = self.port.compare(image_a, image_b)
+        except FaceCompareProviderError as exc:
+            return GeneralResponse(
+                success=False,
+                message="Fallo al comparar rostros",
+                error=ErrorDTO(
+                    code="FACE_COMPARE_PROVIDER_ERROR",
+                    message="Fallo al comparar rostros",
+                    details={
+                        "provider_status_code": exc.status_code,
+                        "provider_response_body": exc.response_body,
+                    },
+                ),
+            )
         except Exception as exc:
             return GeneralResponse(
                 success=False,

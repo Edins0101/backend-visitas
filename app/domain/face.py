@@ -17,3 +17,10 @@ class FaceMatchResult:
 class FaceComparePort(Protocol):
     def compare(self, image_a: bytes, image_b: bytes) -> Optional[FaceMatchResult]:
         ...
+
+
+class FaceCompareProviderError(Exception):
+    def __init__(self, status_code: int, response_body: str):
+        self.status_code = status_code
+        self.response_body = response_body
+        super().__init__(f"Face compare provider returned HTTP {status_code}: {response_body}")

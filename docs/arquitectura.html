@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arquitectura Hexagonal - backend-visitas</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #eef0f4;
+    font-family: system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 32px;
+  }
+
+  .wrapper { max-width: 1180px; width: 100%; }
+
+  .header { margin-bottom: 36px; }
+  .header-row { display: flex; align-items: center; gap: 12px; margin-bottom: 5px; }
+  .header h1 { font-size: 21px; font-weight: 700; color: #1e2130; letter-spacing: -0.3px; }
+  .chip { font-size: 11px; font-weight: 600; color: #6366f1; background: #e8eaff; padding: 3px 10px; border-radius: 20px; }
+  .subtitle { font-size: 13px; color: #6b7280; }
+
+  .diagram { display: flex; align-items: center; }
+
+  .card {
+    border-radius: 14px;
+    background: #f2f4f7;
+    border: 1.5px solid #e2e5ea;
+    padding: 22px 18px;
+  }
+  .card-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+    margin-bottom: 13px;
+  }
+  .card-title { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 3px; }
+  .card-sub { font-size: 12px; color: #6b7280; margin-bottom: 14px; }
+  .card-icon { display: flex; justify-content: center; margin-bottom: 12px; }
+
+  .card-entrada { width: 196px; flex-shrink: 0; }
+  .card-entrada .card-label { color: #10b981; }
+
+  .card-nucleo {
+    flex: 1;
+    margin: 0 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 292px;
+  }
+  .card-nucleo .card-label { color: #6366f1; width: 100%; text-align: center; }
+  .core-layer-note {
+    font-size: 11px;
+    color: #818cf8;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .card-salida { width: 196px; flex-shrink: 0; }
+  .card-salida .card-label { color: #f59e0b; }
+  .internal-service {
+    margin-top: 10px;
+    border: 1px solid #fcd34d;
+    background: #fffbeb;
+    border-radius: 8px;
+    padding: 7px 8px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .internal-service-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: #fde68a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .internal-service-name {
+    font-size: 10px;
+    color: #92400e;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .internal-service-sub {
+    font-size: 9px;
+    color: #b45309;
+    line-height: 1.2;
+  }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: #e8eaee;
+    color: #6b7280;
+    border: 1px solid #d8dce3;
+  }
+
+  .nucleo-inner {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .app-box {
+    width: 100%;
+    border-radius: 10px;
+    border: 1.5px solid #c7d2fe;
+    background: #eef2ff;
+    padding: 10px 16px;
+    text-align: center;
+  }
+  .app-box-icon { display: flex; justify-content: center; margin-bottom: 5px; }
+  .app-box-title { font-size: 12px; font-weight: 600; color: #4f46e5; }
+  .app-box-sub { font-size: 10px; color: #6366f1; margin-top: 2px; }
+
+  .hex-area { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .hex-label { font-size: 11px; font-weight: 600; color: #6366f1; }
+
+  .connector { width: 118px; flex-shrink: 0; display: flex; justify-content: center; }
+  .flow-text { font-size: 7px; fill: #94a3b8; font-family: system-ui, -apple-system, sans-serif; text-anchor: middle; }
+
+  .externals {
+    width: 286px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-left: 0;
+  }
+  .ext-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ext-connector {
+    width: 92px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+  .ext-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: none;
+    color: #60a5fa;
+    margin-bottom: 4px;
+    padding-left: 150px;
+    white-space: nowrap;
+  }
+  .ext-card {
+    background: #f2f4f7;
+    border: 1.5px solid #e2e5ea;
+    border-radius: 12px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    transition: border-color 0.15s;
+    cursor: default;
+    flex: 1;
+  }
+  .ext-card:hover { border-color: #93c5fd; }
+  .ext-ico {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .ext-name { font-size: 12px; font-weight: 600; color: #1f2937; }
+  .ext-type { font-size: 10px; color: #9ca3af; margin-top: 1px; }
+
+  .footer { margin-top: 24px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .leg { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #6b7280; }
+  .leg-line { width: 24px; height: 2px; border-radius: 2px; }
+  .leg-solid { background: #94a3b8; }
+  .leg-dashed { background: repeating-linear-gradient(90deg, #60a5fa 0 5px, transparent 5px 9px); }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <div class="header-row">
+      <h1>Arquitectura Hexagonal</h1>
+      <span class="chip">backend-visitas</span>
+    </div>
+    <p class="subtitle">Adaptador de entrada -> Nucleo (Aplicacion + Dominio + Puertos) -> Adaptador de salida -> Sistemas externos</p>
+  </div>
+
+  <div class="diagram">
+
+    <div class="card card-entrada">
+      <div class="card-label">API</div>
+      <div class="card-icon">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="11" fill="#d1fae5"/>
+          <path d="M12 20h16M23 15l5 5-5 5" stroke="#10b981" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="20" r="2.2" fill="#10b981"/>
+        </svg>
+      </div>
+      <div class="card-title">FastAPI</div>
+      <div class="card-sub">Adaptador de entrada (infraestructura)</div>
+      <div class="tags">
+        <span class="tag">qr</span>
+        <span class="tag">catalogo</span>
+        <span class="tag">ocr</span>
+        <span class="tag">twilio</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <svg width="118" height="56" viewBox="0 0 118 56" fill="none">
+        <defs>
+          <marker id="h1a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#10b981"/>
+          </marker>
+          <marker id="h1b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#6366f1"/>
+          </marker>
+        </defs>
+        <line x1="4" y1="20" x2="114" y2="20" stroke="#10b981" stroke-width="1.5" marker-end="url(#h1a)"/>
+        <line x1="114" y1="36" x2="8" y2="36" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#h1b)"/>
+        <text class="flow-text">
+          <tspan x="59" y="11">request</tspan>
+          <tspan x="59" dy="7">adaptador entrada -> caso de uso</tspan>
+        </text>
+        <text class="flow-text">
+          <tspan x="59" y="47">response</tspan>
+          <tspan x="59" dy="7">caso de uso -> adaptador entrada</tspan>
+        </text>
+      </svg>
+    </div>
+
+    <div class="card card-nucleo">
+      <div class="card-label">Nucleo Hexagonal</div>
+      <div class="core-layer-note">Capa de aplicacion + dominio + puertos</div>
+      <div class="nucleo-inner">
+
+        <div class="app-box">
+          <div class="app-box-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="#6366f1" stroke-width="1.8"/>
+              <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="#6366f1" stroke-width="1.8"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="#6366f1" stroke-width="1.8"/>
+              <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="#6366f1" stroke-width="1.8"/>
+            </svg>
+          </div>
+          <div class="app-box-title">Aplicacion (Casos de uso)</div>
+          <div class="app-box-sub">Orquesta puertos de entrada y salida</div>
+        </div>
+
+        <div class="hex-area">
+          <svg width="90" height="82" viewBox="0 0 90 82" fill="none">
+            <polygon points="45,4 83,24 83,62 45,82 7,62 7,24" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+            <polygon points="45,16 71,31 71,59 45,74 19,59 19,31" fill="none" stroke="#a5b4fc" stroke-width="1" stroke-dasharray="4 3"/>
+            <circle cx="45" cy="43" r="9" stroke="#6366f1" stroke-width="1.6"/>
+            <circle cx="45" cy="43" r="3.2" fill="#6366f1"/>
+            <line x1="45" y1="29" x2="45" y2="33" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="45" y1="53" x2="45" y2="57" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="31" y1="43" x2="35" y2="43" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="55" y1="43" x2="59" y2="43" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="34.4" y1="33.4" x2="37.3" y2="36.3" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="52.7" y1="49.7" x2="55.6" y2="52.6" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="55.6" y1="33.4" x2="52.7" y2="36.3" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="37.3" y1="49.7" x2="34.4" y2="52.6" stroke="#6366f1" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <div class="hex-label">Dominio + Puertos</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="connector">
+      <svg width="118" height="56" viewBox="0 0 118 56" fill="none">
+        <defs>
+          <marker id="h2a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#f59e0b"/>
+          </marker>
+          <marker id="h2b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#60a5fa"/>
+          </marker>
+        </defs>
+        <line x1="4" y1="20" x2="114" y2="20" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#h2a)"/>
+        <line x1="114" y1="36" x2="8" y2="36" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#h2b)"/>
+        <text class="flow-text">
+          <tspan x="59" y="11">outbound call</tspan>
+          <tspan x="59" dy="7">puerto salida -> adaptador salida</tspan>
+        </text>
+        <text class="flow-text">
+          <tspan x="59" y="47">result</tspan>
+          <tspan x="59" dy="7">adaptador salida -> puerto salida</tspan>
+        </text>
+      </svg>
+    </div>
+
+    <div class="card card-salida">
+      <div class="card-label">Infraestructura</div>
+      <div class="card-icon">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="11" fill="#fef3c7"/>
+          <path d="M20 12v14M15 22l5 5 5-5" stroke="#f59e0b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M13 12h14" stroke="#f59e0b" stroke-width="1.9" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="card-title">Outbound Adapters</div>
+      <div class="card-sub">Adaptadores de salida + OCR local</div>
+      <div class="tags">
+        <span class="tag">repo</span>
+        <span class="tag">ocr local</span>
+        <span class="tag">face</span>
+        <span class="tag">twilio</span>
+      </div>
+      <div class="internal-service">
+        <div class="internal-service-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 4h12v16H6z" stroke="#b45309" stroke-width="1.7"/>
+            <path d="M8.5 8h7M8.5 12h7M8.5 16h4.5" stroke="#b45309" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="internal-service-name">OCR interno</div>
+          <div class="internal-service-sub">PaddleOCR / EasyOCR local</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="externals">
+        <div class="ext-section-label" >Sistemas externos</div>
+
+      <div class="ext-row">
+        <svg class="ext-connector" viewBox="0 0 92 40" fill="none" aria-hidden="true">
+          <defs>
+            <marker id="e1a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#f59e0b"/>
+            </marker>
+            <marker id="e1b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#60a5fa"/>
+            </marker>
+          </defs>
+          <line x1="2" y1="13" x2="90" y2="13" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#e1a)"/>
+          <line x1="90" y1="27" x2="6" y2="27" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#e1b)"/>
+        </svg>
+        <div class="ext-card">
+          <div class="ext-ico" style="background:#dbeafe;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <ellipse cx="12" cy="6" rx="8" ry="3" stroke="#3b82f6" stroke-width="1.8"/>
+              <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" stroke="#3b82f6" stroke-width="1.8"/>
+              <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="#3b82f6" stroke-width="1.8"/>
+            </svg>
+          </div>
+          <div>
+            <div class="ext-name">Postgres</div>
+            <div class="ext-type">Base de datos</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ext-row">
+        <svg class="ext-connector" viewBox="0 0 92 40" fill="none" aria-hidden="true">
+          <defs>
+            <marker id="e2a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#f59e0b"/>
+            </marker>
+            <marker id="e2b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#60a5fa"/>
+            </marker>
+          </defs>
+          <line x1="2" y1="13" x2="90" y2="13" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#e2a)"/>
+          <line x1="90" y1="27" x2="6" y2="27" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#e2b)"/>
+        </svg>
+        <div class="ext-card">
+          <div class="ext-ico" style="background:#fef3c7;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div class="ext-name">Twilio</div>
+            <div class="ext-type">SMS / WhatsApp</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ext-row">
+        <svg class="ext-connector" viewBox="0 0 92 40" fill="none" aria-hidden="true">
+          <defs>
+            <marker id="e3a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#f59e0b"/>
+            </marker>
+            <marker id="e3b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 Z" fill="#60a5fa"/>
+            </marker>
+          </defs>
+          <line x1="2" y1="13" x2="90" y2="13" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#e3a)"/>
+          <line x1="90" y1="27" x2="6" y2="27" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#e3b)"/>
+        </svg>
+        <div class="ext-card">
+          <div class="ext-ico" style="background:#f3e8ff;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="#a855f7" stroke-width="1.8"/>
+              <circle cx="9" cy="10" r="1" fill="#a855f7"/>
+              <circle cx="15" cy="10" r="1" fill="#a855f7"/>
+              <path d="M9 15c.83 1.33 5.17 1.33 6 0" stroke="#a855f7" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <div class="ext-name">Face Compare API</div>
+            <div class="ext-type">Servicio HTTP externo</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="leg"><div class="leg-line leg-solid"></div><span>Flujo de llamada hacia la siguiente capa</span></div>
+    <div class="leg"><div class="leg-line leg-dashed"></div><span>Flujo de retorno hacia la capa anterior</span></div>
+  </div>
+
+</div>
+</body>
+</html>

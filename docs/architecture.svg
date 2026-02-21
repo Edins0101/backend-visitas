@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <marker id="arrowDark" markerWidth="10" markerHeight="10" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#111827"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .bg { fill: #ffffff; }
+      .title { font: 700 34px "Segoe UI", Arial, sans-serif; fill: #111827; }
+      .subtitle { font: 500 18px "Segoe UI", Arial, sans-serif; fill: #475569; }
+      .h { font: 700 21px "Segoe UI", Arial, sans-serif; fill: #111827; }
+      .t { font: 500 16px "Segoe UI", Arial, sans-serif; fill: #475569; }
+      .mini { font: 500 14px "Segoe UI", Arial, sans-serif; fill: #64748b; }
+      .box { fill: #ffffff; stroke-width: 2.2; rx: 14; ry: 14; }
+      .in { stroke: #22c55e; }
+      .core { stroke: #8b5cf6; }
+      .out { stroke: #f97316; }
+      .ext { stroke: #64748b; }
+      .chip { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; rx: 10; ry: 10; }
+      .flowReq { stroke: #111827; stroke-width: 2.8; fill: none; marker-end: url(#arrowDark); }
+      .flowRes { stroke: #2563eb; stroke-width: 2.6; stroke-dasharray: 7 6; fill: none; marker-end: url(#arrowBlue); }
+      .busReq { stroke: #111827; stroke-width: 2.2; fill: none; }
+      .busRes { stroke: #2563eb; stroke-width: 2.2; stroke-dasharray: 7 6; fill: none; }
+      .guide { stroke: #cbd5e1; stroke-width: 1; fill: none; stroke-dasharray: 5 6; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="900"/>
+
+  <text class="title" x="70" y="82">Arquitectura Hexagonal - backend-visitas</text>
+  <text class="subtitle" x="70" y="112">Entrada -> Nucleo -> Salida -> Externos (con retorno)</text>
+
+  <!-- Entrada -->
+  <rect class="box in" x="120" y="280" width="250" height="250"/>
+  <text class="h" x="160" y="326">Entrada</text>
+  <text class="t" x="160" y="360">FastAPI Routers</text>
+  <text class="mini" x="160" y="392">qr | catalogo | ocr | twilio</text>
+
+  <!-- Nucleo -->
+  <rect class="box core" x="530" y="220" width="440" height="370"/>
+  <text class="h" x="710" y="268" text-anchor="middle">Nucleo Hexagonal</text>
+  <rect class="chip" x="630" y="302" width="240" height="66"/>
+  <text class="t" x="750" y="342" text-anchor="middle">Application Services</text>
+  <polygon points="750,420 820,460 820,540 750,580 680,540 680,460" fill="#f3e8ff" stroke="#8b5cf6" stroke-width="2.2"/>
+  <text class="t" x="722" y="500">Domain + Ports</text>
+
+  <!-- Salida -->
+  <rect class="box out" x="1130" y="280" width="250" height="250"/>
+  <text class="h" x="1170" y="326">Salida</text>
+  <text class="t" x="1170" y="360">Adapters</text>
+  <text class="mini" x="1170" y="392">repo | ocr | face | twilio</text>
+
+  <!-- Externos -->
+  <rect class="box ext" x="1410" y="210" width="130" height="78"/>
+  <text class="mini" x="1443" y="256">Postgres</text>
+
+  <rect class="box ext" x="1410" y="308" width="130" height="78"/>
+  <text class="mini" x="1452" y="354">Twilio</text>
+
+  <rect class="box ext" x="1410" y="406" width="130" height="78"/>
+  <text class="mini" x="1459" y="452">OCR</text>
+
+  <rect class="box ext" x="1410" y="504" width="130" height="78"/>
+  <text class="mini" x="1437" y="550">Face API</text>
+
+  <!-- Guides -->
+  <path class="guide" d="M370 405 L530 405"/>
+  <path class="guide" d="M970 405 L1130 405"/>
+
+  <!-- Request -->
+  <path class="flowReq" d="M370 395 L530 395"/>
+  <path class="flowReq" d="M970 395 L1130 395"/>
+  <path class="flowReq" d="M1380 395 L1392 395"/>
+  <path class="busReq" d="M1392 249 L1392 543"/>
+  <path class="flowReq" d="M1392 249 L1410 249"/>
+  <path class="flowReq" d="M1392 347 L1410 347"/>
+  <path class="flowReq" d="M1392 445 L1410 445"/>
+  <path class="flowReq" d="M1392 543 L1410 543"/>
+
+  <!-- Response -->
+  <path class="flowRes" d="M1410 263 L1348 263"/>
+  <path class="flowRes" d="M1410 361 L1348 361"/>
+  <path class="flowRes" d="M1410 459 L1348 459"/>
+  <path class="flowRes" d="M1410 557 L1348 557"/>
+  <path class="busRes" d="M1348 263 L1348 557"/>
+  <path class="flowRes" d="M1348 425 L1130 425"/>
+  <path class="flowRes" d="M1130 425 L970 425"/>
+  <path class="flowRes" d="M530 425 L370 425"/>
+
+  <text class="mini" x="985" y="382">Request</text>
+  <text class="mini" x="985" y="446">Response</text>
+</svg>
