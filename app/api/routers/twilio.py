@@ -44,8 +44,8 @@ def _get_service() -> TwilioService:
 
 
 @router.post("/api/call")
-def start_call(payload: TwilioCallRequestDTO, visitId: str | None = None):
-    visit_id = (visitId or "").strip() or uuid4().hex
+def start_call(payload: TwilioCallRequestDTO):
+    visit_id = uuid4().hex
     logger.info(
         "start_call_request to=%s resident=%s visitor=%s visit_id=%s",
         payload.to,

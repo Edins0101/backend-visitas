@@ -241,7 +241,7 @@ El endpoint asigna internamente `tipo=visita_sin_qr` y `usuario=system`.
 2. Llamar a Twilio con los datos del residente/visitante:
 
 ```json
-POST /api/call?visitId=123
+POST /api/call
 {
   "to": "+593979684121",
   "residentName": "Juan Perez",
