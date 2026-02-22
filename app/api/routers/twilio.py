@@ -44,14 +44,13 @@ def _get_service() -> TwilioService:
 
 
 @router.post("/api/call")
-def start_call(payload: TwilioCallRequestDTO):
-    visit_id = (payload.visitId or "").strip() or uuid4().hex
+def start_call(payload: TwilioCallRequestDTO, visitId: str | None = None):
+    visit_id = (visitId or "").strip() or uuid4().hex
     logger.info(
-        "start_call_request to=%s resident=%s visitor=%s plate=%s visit_id=%s",
+        "start_call_request to=%s resident=%s visitor=%s visit_id=%s",
         payload.to,
         payload.residentName,
         payload.visitorName,
-        payload.plate,
         visit_id,
     )
 
@@ -60,7 +59,6 @@ def start_call(payload: TwilioCallRequestDTO):
         to=payload.to,
         resident_name=payload.residentName,
         visitor_name=payload.visitorName,
-        plate=payload.plate,
         visit_id=visit_id,
     )
 
@@ -76,7 +74,6 @@ def start_call(payload: TwilioCallRequestDTO):
                 to=payload.to,
                 resident_name=payload.residentName or "",
                 visitor_name=payload.visitorName or "",
-                plate=payload.plate or "",
             )
             logger.info("start_call_tracked call_sid=%s visit_id=%s", record["callSid"], record["visitId"])
 
@@ -94,14 +91,12 @@ def start_call(payload: TwilioCallRequestDTO):
 def twilio_voice(
     residentName: str | None = None,
     visitorName: str | None = None,
-    plate: str | None = None,
     visitId: str | None = None,
 ):
     logger.info(
-        "twilio_voice_request resident=%s visitor=%s plate=%s visit_id=%s",
+        "twilio_voice_request resident=%s visitor=%s visit_id=%s",
         residentName,
         visitorName,
-        plate,
         visitId,
     )
 
@@ -109,7 +104,6 @@ def twilio_voice(
     twiml = service.build_voice_twiml(
         resident_name=residentName,
         visitor_name=visitorName,
-        plate=plate,
         visit_id=visitId,
     )
     logger.info("twilio_voice_response status=200 twiml=%s", _truncate(twiml))
@@ -123,21 +117,19 @@ def twilio_handle_input(
     CallSid: str | None = Form(default=None),
     residentName: str | None = None,
     visitorName: str | None = None,
-    plate: str | None = None,
     visitId: str | None = None,
 ):
     digit = Digits if Digits is not None else request.query_params.get("Digits")
     call_sid = CallSid if CallSid is not None else request.query_params.get("CallSid")
     normalized_digit = _normalize_digit(digit)
     logger.info(
-        "twilio_handle_input_request raw_digits=%s resolved_digit=%s normalized_digit=%s call_sid=%s resident=%s visitor=%s plate=%s visit_id=%s",
+        "twilio_handle_input_request raw_digits=%s resolved_digit=%s normalized_digit=%s call_sid=%s resident=%s visitor=%s visit_id=%s",
         Digits,
         digit,
         normalized_digit,
         call_sid,
         residentName,
         visitorName,
-        plate,
         visitId,
     )
 
@@ -161,7 +153,6 @@ def twilio_handle_input(
         digit=digit,
         resident_name=residentName,
         visitor_name=visitorName,
-        plate=plate,
         visit_id=visitId,
         call_sid=call_sid,
     )

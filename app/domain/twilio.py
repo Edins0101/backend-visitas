@@ -17,7 +17,6 @@ class TwimlBuilderPort(Protocol):
         self,
         resident_name: str,
         visitor_name: str,
-        plate: str,
         visit_id: str,
         base_url: str | None,
     ) -> str:
@@ -28,7 +27,6 @@ class TwimlBuilderPort(Protocol):
         digit: str,
         resident_name: str,
         visitor_name: str,
-        plate: str,
         visit_id: str,
         base_url: str | None,
     ) -> str:
@@ -41,7 +39,6 @@ class AccessDecisionNotifierPort(Protocol):
         decision: str,
         resident_name: str,
         visitor_name: str,
-        plate: str,
         digit: str,
         visit_id: str,
         call_sid: str | None,

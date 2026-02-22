@@ -21,7 +21,6 @@ class InMemoryCallTrackingStore:
         to: str,
         resident_name: str,
         visitor_name: str,
-        plate: str,
     ) -> dict:
         now = _utc_now_iso()
         with self._lock:
@@ -31,7 +30,6 @@ class InMemoryCallTrackingStore:
                 "to": to,
                 "residentName": resident_name,
                 "visitorName": visitor_name,
-                "plate": plate,
                 "callStatus": "initiated",
                 "decision": None,
                 "digit": None,
@@ -66,7 +64,6 @@ class InMemoryCallTrackingStore:
                     "to": to_number or "",
                     "residentName": "",
                     "visitorName": "",
-                    "plate": "",
                     "callStatus": call_status,
                     "decision": None,
                     "digit": None,

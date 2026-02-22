@@ -59,7 +59,6 @@ class TwilioService:
         to: str,
         resident_name: str | None,
         visitor_name: str | None,
-        plate: str | None,
         visit_id: str,
     ) -> GeneralResponse[dict]:
         if not to:
@@ -91,7 +90,6 @@ class TwilioService:
             {
                 "residentName": resident_name or "",
                 "visitorName": visitor_name or "",
-                "plate": plate or "",
                 "visitId": visit_id,
             }
         )
@@ -135,13 +133,11 @@ class TwilioService:
         self,
         resident_name: str | None,
         visitor_name: str | None,
-        plate: str | None,
         visit_id: str | None,
     ) -> str:
         return self._twiml_port.build_voice(
             resident_name or "",
             visitor_name or "",
-            plate or "",
             visit_id or "",
             self._config.base_url,
         )
@@ -151,7 +147,6 @@ class TwilioService:
         digit: str | None,
         resident_name: str | None,
         visitor_name: str | None,
-        plate: str | None,
         visit_id: str | None,
         call_sid: str | None,
     ) -> str:
@@ -160,16 +155,14 @@ class TwilioService:
         normalized_digit = extracted_digits[:1]
         normalized_resident = resident_name or ""
         normalized_visitor = visitor_name or ""
-        normalized_plate = plate or ""
         normalized_visit_id = visit_id or ""
 
         logger.info(
-            "handle_input_digit_resolved raw=%s normalized=%s resident=%s visitor=%s plate=%s visit_id=%s call_sid=%s",
+            "handle_input_digit_resolved raw=%s normalized=%s resident=%s visitor=%s visit_id=%s call_sid=%s",
             raw_digit,
             normalized_digit,
             normalized_resident,
             normalized_visitor,
-            normalized_plate,
             normalized_visit_id,
             call_sid,
         )
@@ -179,7 +172,6 @@ class TwilioService:
                 decision="authorized",
                 resident_name=normalized_resident,
                 visitor_name=normalized_visitor,
-                plate=normalized_plate,
                 digit=normalized_digit,
                 visit_id=normalized_visit_id,
                 call_sid=call_sid,
@@ -189,7 +181,6 @@ class TwilioService:
                 decision="rejected",
                 resident_name=normalized_resident,
                 visitor_name=normalized_visitor,
-                plate=normalized_plate,
                 digit=normalized_digit,
                 visit_id=normalized_visit_id,
                 call_sid=call_sid,
@@ -201,7 +192,6 @@ class TwilioService:
             normalized_digit,
             normalized_resident,
             normalized_visitor,
-            normalized_plate,
             normalized_visit_id,
             self._config.base_url,
         )
@@ -211,18 +201,16 @@ class TwilioService:
         decision: str,
         resident_name: str,
         visitor_name: str,
-        plate: str,
         digit: str,
         visit_id: str,
         call_sid: str | None,
     ) -> None:
         try:
             logger.info(
-                "notify_decision_request decision=%s resident=%s visitor=%s plate=%s digit=%s visit_id=%s call_sid=%s",
+                "notify_decision_request decision=%s resident=%s visitor=%s digit=%s visit_id=%s call_sid=%s",
                 decision,
                 resident_name,
                 visitor_name,
-                plate,
                 digit,
                 visit_id,
                 call_sid,
@@ -231,7 +219,6 @@ class TwilioService:
                 decision=decision,
                 resident_name=resident_name,
                 visitor_name=visitor_name,
-                plate=plate,
                 digit=digit,
                 visit_id=visit_id,
                 call_sid=call_sid,

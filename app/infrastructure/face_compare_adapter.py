@@ -1,10 +1,12 @@
 import os
+import io
 from typing import Optional, Any
 
 import httpx
 
 import cv2
 import numpy as np
+from PIL import Image, ImageOps
 
 from app.domain.face import FaceComparePort, FaceMatchResult, FaceCompareProviderError
 
@@ -36,9 +38,12 @@ class HttpFaceCompareAdapter(FaceComparePort):
         self.timeout = timeout if timeout is not None else float(env_timeout)
 
     def compare(self, image_a: bytes, image_b: bytes) -> Optional[Any]:
+        image_a_jpg = _to_jpeg_bytes(image_a)
+        image_b_jpg = _to_jpeg_bytes(image_b)
+
         files = {
-            "foto_cedula": ("foto_cedula.jpg", image_a, "image/jpeg"),
-            "foto_rostro_vivo": ("foto_rostro_vivo.jpg", image_b, "image/jpeg"),
+            "foto_cedula": ("foto_cedula.jpg", image_a_jpg, "image/jpeg"),
+            "foto_rostro_vivo": ("foto_rostro_vivo.jpg", image_b_jpg, "image/jpeg"),
         }
         response = httpx.post(self.url, files=files, timeout=self.timeout)
         try:
@@ -122,3 +127,11 @@ def _hist_similarity(face_a: np.ndarray, face_b: np.ndarray) -> float:
 def _prep_gray(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     return cv2.resize(gray, (160, 160))
+
+
+def _to_jpeg_bytes(image_bytes: bytes) -> bytes:
+    with Image.open(io.BytesIO(image_bytes)) as image:
+        normalized = ImageOps.exif_transpose(image).convert("RGB")
+        out = io.BytesIO()
+        normalized.save(out, format="JPEG", quality=92)
+        return out.getvalue()

@@ -207,20 +207,55 @@ Si no se configura, la llamada IVR responde por voz pero no envia ninguna decisi
 - `POST /twilio/voice/status`
 - `GET /api/call/{call_sid}/status`
 - `GET /api/visit/{visit_id}/status`
+- `POST /accesos`
+- `POST /accesos/twilio-decision`
+- `GET /accesos/{acceso_pk}`
 
 Body ejemplo:
 
 ```json
 {
   "to": "+593979684121",
-  "visitId": "visita-123",
   "residentName": "Juan Perez",
-  "visitorName": "Carlos Lopez",
-  "plate": "ABC-1234"
+  "visitorName": "Carlos Lopez"
 }
 ```
 
-`visitId` es opcional. Si no se envia, el backend genera uno automaticamente.
+`/api/call` no requiere `visitId` en el body. El backend lo genera automaticamente.
+
+### Flujo recomendado acceso + twilio
+
+1. Crear acceso pendiente:
+
+```json
+POST /accesos
+{
+  "viviendaVisitaFk": 123,
+  "motivo": "Validacion por llamada",
+  "visitorName": "Carlos Lopez"
+}
+```
+
+El endpoint asigna internamente `tipo=visita_sin_qr` y `usuario=system`.
+
+2. Llamar a Twilio con los datos del residente/visitante:
+
+```json
+POST /api/call?visitId=123
+{
+  "to": "+593979684121",
+  "residentName": "Juan Perez",
+  "visitorName": "Carlos Lopez"
+}
+```
+
+3. Configurar en `.env`:
+
+```env
+TWILIO_DECISION_WEBHOOK_URL=https://tu-base-url/accesos/twilio-decision
+```
+
+Cuando el residente marca `1` o `2`, el backend actualiza `acceso.resultado` a `autorizado` o `rechazado`.
 
 ---
 

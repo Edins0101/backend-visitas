@@ -10,7 +10,6 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
         self,
         resident_name: str,
         visitor_name: str,
-        plate: str,
         visit_id: str,
         base_url: str | None,
     ) -> str:
@@ -18,11 +17,10 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
 
         name = resident_name or ""
         visitor = visitor_name or "no identificado"
-        plate_info = f"con placa {plate} " if plate else ""
 
         info_message = (
             f"Hola. Se solicita autorizacion de ingreso para el visitante {visitor} "
-            f"{plate_info}. "
+            ". "
             f"Estimado residente {name}, "
             "si desea autorizar el ingreso, presione 1. "
             "Si desea rechazar el ingreso, presione 2. "
@@ -33,7 +31,6 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
             {
                 "residentName": name,
                 "visitorName": visitor_name or "",
-                "plate": plate or "",
                 "visitId": visit_id,
             }
         )
@@ -61,7 +58,6 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
         digit: str,
         resident_name: str,
         visitor_name: str,
-        plate: str,
         visit_id: str,
         base_url: str | None,
     ) -> str:
@@ -71,7 +67,6 @@ class TwilioTwimlAdapter(TwimlBuilderPort):
             {
                 "residentName": resident_name or "",
                 "visitorName": visitor_name or "",
-                "plate": plate or "",
                 "visitId": visit_id,
             }
         )
