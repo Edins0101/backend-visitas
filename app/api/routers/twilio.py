@@ -5,8 +5,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import Response, JSONResponse
 
+from app.application.services.acceso_service import AccesoService
 from app.application.dtos.requests.twilio_call_request import TwilioCallRequestDTO
 from app.application.services.twilio_service import TwilioService
+from app.infrastructure.acceso_repository import AccesoRepository
+from app.infrastructure.db import SessionLocal
 from app.infrastructure.in_memory_call_tracking_store import InMemoryCallTrackingStore
 from app.infrastructure.twilio_call_adapter import TwilioCallAdapter
 from app.infrastructure.twilio_decision_notifier_adapter import WebhookAccessDecisionNotifierAdapter
@@ -41,6 +44,60 @@ def _get_service() -> TwilioService:
         ),
     )
     return service
+
+
+def _apply_acceso_decision_direct(
+    *,
+    visit_id: str | None,
+    normalized_digit: str,
+    call_sid: str | None,
+) -> None:
+    if normalized_digit not in {"1", "2"}:
+        return
+    if not (visit_id or "").strip():
+        logger.warning(
+            "twilio_direct_access_update_skipped reason=missing_visit_id digit=%s call_sid=%s",
+            normalized_digit,
+            call_sid,
+        )
+        return
+
+    decision = "authorized" if normalized_digit == "1" else "rejected"
+    db = SessionLocal()
+    try:
+        service = AccesoService(repo=AccesoRepository(db))
+        response = service.aplicar_decision_twilio(
+            decision=decision,
+            visit_id=visit_id or "",
+            digit=normalized_digit,
+            call_sid=call_sid,
+        )
+        if response.success:
+            logger.info(
+                "twilio_direct_access_update_ok visit_id=%s decision=%s digit=%s call_sid=%s",
+                visit_id,
+                decision,
+                normalized_digit,
+                call_sid,
+            )
+        else:
+            logger.warning(
+                "twilio_direct_access_update_failed visit_id=%s decision=%s digit=%s call_sid=%s error=%s",
+                visit_id,
+                decision,
+                normalized_digit,
+                call_sid,
+                response.model_dump(),
+            )
+    except Exception:
+        logger.exception(
+            "twilio_direct_access_update_exception visit_id=%s digit=%s call_sid=%s",
+            visit_id,
+            normalized_digit,
+            call_sid,
+        )
+    finally:
+        db.close()
 
 
 @router.post("/api/call")
@@ -140,12 +197,22 @@ def twilio_handle_input(
             decision="authorized",
             digit=normalized_digit,
         )
+        _apply_acceso_decision_direct(
+            visit_id=visitId,
+            normalized_digit=normalized_digit,
+            call_sid=call_sid,
+        )
     elif normalized_digit == "2":
         call_tracking_store.update_decision(
             call_sid=call_sid,
             visit_id=visitId,
             decision="rejected",
             digit=normalized_digit,
+        )
+        _apply_acceso_decision_direct(
+            visit_id=visitId,
+            normalized_digit=normalized_digit,
+            call_sid=call_sid,
         )
 
     service = _get_service()

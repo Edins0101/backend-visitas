@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.application.dtos.responses.general_response import ErrorDTO, GeneralResponse
+from app.application.services.twilio_service import TwilioService
 from app.infrastructure.acceso_repository import AccesoRepository
 
 
@@ -31,7 +32,7 @@ class AccesoService:
         visita_ingreso_fk = None
         vehiculo_ingreso_fk = None
         placa_detectada = None
-        biometria_ok = None
+        biometria_ok = True
         placa_ok = None
         observacion = None
         normalized_motivo = (motivo or "").strip()
@@ -87,28 +88,78 @@ class AccesoService:
         )
         self.repo.db.commit()
 
-        residente_nombre = f"{residente.get('nombres', '').strip()} {residente.get('apellidos', '').strip()}".strip()
         data = {
             "accesoPk": record["acceso_pk"],
             "visitId": str(record["acceso_pk"]),
             "estado": "pendiente",
             "resultadoPersistido": record["resultado"],
+            "motivo": record["motivo"],
             "tipo": record["tipo"],
             "viviendaPk": record["vivienda_visita_fk"],
-            "residente": {
-                "personaPk": residente["persona_residente_pk"],
-                "nombreCompleto": residente_nombre,
-                "celular": self._normalizar_celular_ecuador(residente.get("celular")),
-            },
-            "twilioPayload": {
-                "to": self._normalizar_celular_ecuador(residente.get("celular")),
-                "residentName": residente_nombre,
-                "visitorName": visitor_name or "",
-                "visitId": str(record["acceso_pk"]),
-            },
             "schemaSupportsPendiente": supports_pending,
         }
         return GeneralResponse(success=True, message="Acceso creado en estado pendiente", data=data)
+
+    def iniciar_llamada_autorizacion(
+        self,
+        *,
+        acceso_pk: int,
+        twilio_service: TwilioService,
+        visitor_name: str | None = None,
+    ) -> GeneralResponse[dict]:
+        acceso = self.repo.get_by_id(acceso_pk)
+        if not acceso:
+            return GeneralResponse(
+                success=False,
+                message="Acceso no existe",
+                error=ErrorDTO(code="NOT_FOUND", message="Acceso no existe", details={"accesoPk": acceso_pk}),
+            )
+
+        residente = self.repo.get_residente_por_vivienda_pk(vivienda_pk=int(acceso["vivienda_visita_fk"]))
+        if not residente:
+            return GeneralResponse(
+                success=False,
+                message="No se encontro residente para la vivienda del acceso",
+                error=ErrorDTO(
+                    code="RESIDENT_NOT_FOUND",
+                    message="No se encontro residente para la vivienda del acceso",
+                    details={"accesoPk": acceso_pk, "viviendaVisitaFk": acceso["vivienda_visita_fk"]},
+                ),
+            )
+
+        to_number = self._normalizar_celular_ecuador(residente.get("celular"))
+        if not to_number:
+            return GeneralResponse(
+                success=False,
+                message="El residente no tiene celular configurado",
+                error=ErrorDTO(
+                    code="RESIDENT_PHONE_MISSING",
+                    message="El residente no tiene celular configurado",
+                    details={"accesoPk": acceso_pk, "personaPk": residente.get("persona_residente_pk")},
+                ),
+            )
+
+        residente_nombre = f"{residente.get('nombres', '').strip()} {residente.get('apellidos', '').strip()}".strip()
+        twilio_response = twilio_service.start_call(
+            to=to_number,
+            resident_name=residente_nombre or None,
+            visitor_name=(visitor_name or "").strip() or None,
+            visit_id=str(acceso_pk),
+        )
+        if not twilio_response.success:
+            return twilio_response
+
+        twilio_data = twilio_response.data or {}
+        return GeneralResponse(
+            success=True,
+            message="Llamada de autorizacion iniciada",
+            data={
+                "accesoPk": acceso_pk,
+                "callSid": twilio_data.get("callSid"),
+                "visitId": twilio_data.get("visitId"),
+                "estado": "pendiente",
+            },
+        )
 
     def aplicar_decision_twilio(
         self,
@@ -184,6 +235,46 @@ class AccesoService:
             },
         )
 
+    def obtener_estado_para_polling(self, acceso_pk: int) -> GeneralResponse[dict]:
+        record = self.repo.get_by_id(acceso_pk)
+        if not record:
+            return GeneralResponse(
+                success=False,
+                message="Acceso no existe",
+                error=ErrorDTO(code="NOT_FOUND", message="Acceso no existe", details={"accesoPk": acceso_pk}),
+            )
+
+        observacion_data = self._parse_observacion(record.get("observacion"))
+        decision_twilio = (observacion_data.get("decision_twilio") or "").strip().lower()
+
+        if decision_twilio == "authorized":
+            estado = "autorizado"
+        elif decision_twilio == "rejected":
+            estado = "rechazado"
+        elif str(record.get("resultado") or "").strip().lower() in {"autorizado", "rechazado"}:
+            estado = str(record.get("resultado")).strip().lower()
+        else:
+            # Si el schema no soporta "pendiente", el backend pudo guardar "no_autorizado"
+            # como valor inicial. Para polling se expone el estado logico.
+            estado = "pendiente"
+
+        finalizado = estado in {"autorizado", "rechazado"}
+        puede_continuar = estado == "autorizado"
+
+        data = {
+            "accesoPk": record["acceso_pk"],
+            "estado": estado,
+            "finalizado": finalizado,
+            "puedeContinuar": puede_continuar,
+            "resultadoPersistido": record.get("resultado"),
+            "motivo": record.get("motivo"),
+            "digit": observacion_data.get("digit"),
+            "callSid": observacion_data.get("callSid"),
+            "fechaActualizado": record.get("fecha_actualizado"),
+            "usuarioActualizado": record.get("usuario_actualizado"),
+        }
+        return GeneralResponse(success=True, message="Estado de acceso obtenido", data=data)
+
     def obtener_por_id(self, acceso_pk: int) -> GeneralResponse[dict]:
         record = self.repo.get_by_id(acceso_pk)
         if not record:
@@ -211,3 +302,20 @@ class AccesoService:
         if raw.startswith("+"):
             return raw
         return raw
+
+    @staticmethod
+    def _parse_observacion(observacion: str | None) -> dict[str, str]:
+        if not observacion:
+            return {}
+
+        parts = [part.strip() for part in str(observacion).split("|") if part.strip()]
+        data: dict[str, str] = {}
+        for part in parts:
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if key:
+                data[key] = value
+        return data

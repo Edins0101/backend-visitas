@@ -31,6 +31,31 @@ class OpenCvFaceCompareAdapter(FaceComparePort):
         return FaceMatchResult(match=match, distance=distance, threshold=self.threshold)
 
 
+class MockFaceCompareAdapter(FaceComparePort):
+    def __init__(
+        self,
+        match: bool = True,
+        threshold: float = 0.45,
+        distance_if_match: float = 0.1,
+        distance_if_no_match: float = 0.95,
+    ):
+        self.match = bool(match)
+        self.threshold = float(threshold)
+        self.distance_if_match = float(distance_if_match)
+        self.distance_if_no_match = float(distance_if_no_match)
+
+    def compare(self, image_a: bytes, image_b: bytes) -> Optional[Any]:
+        # Mantiene el mismo contrato que espera el servicio (dict con `match`)
+        # sin consumir proveedor externo.
+        return {
+            "match": self.match,
+            "distance": self.distance_if_match if self.match else self.distance_if_no_match,
+            "threshold": self.threshold,
+            "provider": "mock-local",
+            "mock": True,
+        }
+
+
 class HttpFaceCompareAdapter(FaceComparePort):
     def __init__(self, url: Optional[str] = None, timeout: Optional[float] = None):
         self.url = url or os.getenv("FACE_COMPARE_URL", "http://35.197.70.0:8000/api/v1/validate")

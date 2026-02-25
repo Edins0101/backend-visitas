@@ -10,7 +10,7 @@ from app.application.dtos.responses.general_response import GeneralResponse, Err
 from app.application.services.face_compare_service import FaceCompareService
 from app.application.services.face_service import FaceService
 from app.application.services.ocr_service import OcrService
-from app.infrastructure.face_compare_adapter import OpenCvFaceCompareAdapter, HttpFaceCompareAdapter
+from app.infrastructure.face_compare_adapter import MockFaceCompareAdapter
 from app.infrastructure.face_adapter import OpenCvFaceAdapter
 from app.infrastructure.ocr_adapter import EasyOcrAdapter
 from app.infrastructure.paddle_ocr_adapter import PaddleOcrAdapter
@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 _adapter = PaddleOcrAdapter()
 _fallback_adapter = EasyOcrAdapter()
 _face_adapter = OpenCvFaceAdapter()
-_face_compare_adapter = HttpFaceCompareAdapter()
+# Modo temporal: comparar rostros con resultado controlado localmente (sin proveedor externo).
+# Cambia a False para simular no coincidencia.
+_FACE_COMPARE_FORCE_MATCH = True
 
 
 def _sanitize_for_log(value, key: str | None = None):
@@ -51,7 +53,7 @@ def get_face_service() -> FaceService:
 
 
 def get_face_compare_service() -> FaceCompareService:
-    return FaceCompareService(port=_face_compare_adapter)
+    return FaceCompareService(port=MockFaceCompareAdapter(match=_FACE_COMPARE_FORCE_MATCH))
 
 
 class FaceCompareRequest(BaseModel):
