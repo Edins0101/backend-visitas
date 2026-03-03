@@ -352,3 +352,50 @@ class AccesoRepository:
         ).mappings().first()
 
         return dict(row) if row else None
+
+    def update_observacion(
+        self,
+        *,
+        acceso_pk: int,
+        observacion: str | None,
+        usuario_actualizado: str,
+    ) -> dict | None:
+        row = self.db.execute(
+            text(
+                """
+                UPDATE acceso
+                SET observacion = :observacion,
+                    fecha_actualizado = NOW(),
+                    usuario_actualizado = :usuario_actualizado
+                WHERE acceso_pk = :acceso_pk
+                  AND eliminado = FALSE
+                RETURNING
+                    acceso_pk,
+                    tipo,
+                    vivienda_visita_fk,
+                    resultado,
+                    motivo,
+                    persona_guardia_fk,
+                    persona_residente_autoriza_fk,
+                    visita_ingreso_fk,
+                    vehiculo_ingreso_fk,
+                    placa_detectada,
+                    biometria_ok,
+                    placa_ok,
+                    intentos,
+                    observacion,
+                    eliminado,
+                    fecha_creado,
+                    usuario_creado,
+                    fecha_actualizado,
+                    usuario_actualizado
+                """
+            ),
+            {
+                "acceso_pk": acceso_pk,
+                "observacion": observacion,
+                "usuario_actualizado": usuario_actualizado,
+            },
+        ).mappings().first()
+
+        return dict(row) if row else None

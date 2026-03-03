@@ -1,16 +1,16 @@
 import logging
 import os
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.application.dtos.requests.acceso_create_request import AccesoCreateRequestDTO
-from app.application.dtos.requests.acceso_manual_create_request import AccesoManualCreateRequestDTO
 from app.application.dtos.requests.acceso_start_call_request import AccesoStartCallRequestDTO
 from app.application.dtos.requests.acceso_twilio_decision_request import AccesoTwilioDecisionRequestDTO
 from app.application.dtos.requests.acceso_update_placa_request import AccesoUpdatePlacaRequestDTO
+from app.application.dtos.responses.general_response import ErrorDTO, GeneralResponse
 from app.application.services.acceso_service import AccesoService
 from app.application.services.twilio_service import TwilioService
 from app.infrastructure.acceso_repository import AccesoRepository
@@ -48,14 +48,16 @@ def get_twilio_service() -> TwilioService:
 @router.post("")
 def crear_acceso_pendiente(payload: AccesoCreateRequestDTO, service: AccesoService = Depends(get_acceso_service)):
     logger.info(
-        "crear_acceso_request vivienda_visita_fk=%s motivo=%s",
+        "crear_acceso_request vivienda_visita_fk=%s motivo=%s foto_base64_len=%s",
         payload.viviendaVisitaFk,
         payload.motivo,
+        len(payload.fotoRostroVivoBase64 or ""),
     )
     response = service.crear_acceso_pendiente(
         vivienda_visita_fk=payload.viviendaVisitaFk,
         motivo=payload.motivo,
         visitor_name=payload.visitorName,
+        foto_rostro_vivo_base64=payload.fotoRostroVivoBase64,
     )
 
     if response.success:
@@ -72,25 +74,50 @@ def crear_acceso_pendiente(payload: AccesoCreateRequestDTO, service: AccesoServi
 
 @router.post("/manual")
 def crear_acceso_manual_extraordinario(
-    payload: AccesoManualCreateRequestDTO,
+    viviendaVisitaFk: int = Form(...),
+    motivo: str = Form(...),
+    detalle: str | None = Form(default=None),
+    personaGuardiaFk: int | None = Form(default=None),
+    personaResidenteAutorizaFk: int | None = Form(default=None),
+    placa: str | None = Form(default=None),
+    usuarioCreado: str | None = Form(default=None),
+    imagen: UploadFile = File(...),
     service: AccesoService = Depends(get_acceso_service),
 ):
+    allowed_content_types = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+    if (imagen.content_type or "").lower() not in allowed_content_types:
+        response = GeneralResponse(
+            success=False,
+            message="Tipo de imagen no soportado",
+            error=ErrorDTO(code="UNSUPPORTED_MEDIA", message="Tipo de imagen no soportado"),
+        )
+        logger.warning("crear_acceso_manual_response status=415 payload=%s", _as_loggable_payload(response))
+        return JSONResponse(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, content=response.model_dump())
+
+    image_bytes = imagen.file.read()
     logger.info(
-        "crear_acceso_manual_request vivienda_visita_fk=%s motivo=%s guardia_fk=%s residente_fk=%s placa=%s",
-        payload.viviendaVisitaFk,
-        payload.motivo,
-        payload.personaGuardiaFk,
-        payload.personaResidenteAutorizaFk,
-        payload.placa,
+        "crear_acceso_manual_request vivienda_visita_fk=%s motivo=%s guardia_fk=%s residente_fk=%s placa=%s "
+        "filename=%s content_type=%s image_size=%s",
+        viviendaVisitaFk,
+        motivo,
+        personaGuardiaFk,
+        personaResidenteAutorizaFk,
+        placa,
+        imagen.filename,
+        imagen.content_type,
+        len(image_bytes),
     )
     response = service.crear_acceso_manual_extraordinario(
-        vivienda_visita_fk=payload.viviendaVisitaFk,
-        motivo=payload.motivo,
-        detalle=payload.detalle,
-        persona_guardia_fk=payload.personaGuardiaFk,
-        persona_residente_autoriza_fk=payload.personaResidenteAutorizaFk,
-        placa=payload.placa,
-        usuario_creado=payload.usuarioCreado,
+        vivienda_visita_fk=viviendaVisitaFk,
+        motivo=motivo,
+        detalle=detalle,
+        persona_guardia_fk=personaGuardiaFk,
+        persona_residente_autoriza_fk=personaResidenteAutorizaFk,
+        placa=placa,
+        image_bytes=image_bytes,
+        image_content_type=imagen.content_type,
+        image_filename=imagen.filename,
+        usuario_creado=usuarioCreado,
     )
 
     if response.success:
@@ -101,6 +128,8 @@ def crear_acceso_manual_extraordinario(
     status_code = status.HTTP_400_BAD_REQUEST
     if code in {"VIVIENDA_NOT_FOUND", "GUARD_NOT_FOUND", "RESIDENT_AUTH_NOT_FOUND"}:
         status_code = status.HTTP_404_NOT_FOUND
+    elif code == "UNSUPPORTED_MEDIA":
+        status_code = status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
     logger.warning("crear_acceso_manual_response status=%s payload=%s", status_code, _as_loggable_payload(response))
     return JSONResponse(status_code=status_code, content=response.model_dump())
 

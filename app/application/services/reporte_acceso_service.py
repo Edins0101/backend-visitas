@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import mimetypes
 from datetime import date
+from pathlib import Path
 
 from app.application.dtos.responses.general_response import ErrorDTO, GeneralResponse
 from app.infrastructure.reporte_acceso_repository import ReporteAccesoRepository
@@ -131,6 +134,8 @@ class ReporteAccesoService:
             )
 
         observacion_data = self._parse_observacion(row.get("observacion"))
+        imagen_path = observacion_data.get("faceCompareImage") or observacion_data.get("evidencia")
+        imagen_data = self._build_image_data(imagen_path)
         residencia_desc = " ".join(
             part for part in [self._null_if_blank(row.get("manzana")), self._null_if_blank(row.get("villa"))] if part
         ).strip()
@@ -169,6 +174,7 @@ class ReporteAccesoService:
             "resultado": self._null_if_blank(row.get("resultado")),
             "motivo": self._null_if_blank(row.get("motivo")),
             "placa": self._null_if_blank(row.get("placaDetectada")) or self._null_if_blank(row.get("vehiculoPlaca")),
+            "imagen": imagen_data,
             "residencia": residencia,
             "residenteAutoriza": self._section(
                 {
@@ -206,7 +212,7 @@ class ReporteAccesoService:
                 }
             ),
         }
-        data = {key: value for key, value in data.items() if value is not None or key == "placa"}
+        data = {key: value for key, value in data.items() if value is not None or key in {"placa", "imagen"}}
 
         return GeneralResponse(
             success=True,
@@ -309,3 +315,30 @@ class ReporteAccesoService:
             if key:
                 data[key] = value
         return data
+
+    @staticmethod
+    def _build_image_data(evidencia_path: str | None) -> dict | None:
+        normalized = (evidencia_path or "").strip()
+        if not normalized:
+            return None
+
+        path = Path(normalized)
+        if not path.is_absolute():
+            path = Path.cwd() / path
+
+        if not path.exists() or not path.is_file():
+            return {"path": normalized, "available": False}
+
+        try:
+            raw = path.read_bytes()
+        except Exception:
+            return {"path": normalized, "available": False}
+
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        encoded = base64.b64encode(raw).decode("ascii")
+        return {
+            "path": normalized,
+            "available": True,
+            "contentType": content_type,
+            "base64": encoded,
+        }

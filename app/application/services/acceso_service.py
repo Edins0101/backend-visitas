@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import base64
+import binascii
+
 from app.application.dtos.responses.general_response import ErrorDTO, GeneralResponse
 from app.application.services.twilio_service import TwilioService
 from app.domain.placa import extraer_placa
 from app.infrastructure.acceso_repository import AccesoRepository
+from app.infrastructure.face_compare_image_storage import LocalFaceCompareImageStorage
+from app.infrastructure.manual_access_image_storage import LocalManualAccessImageStorage
 
 
 ALLOWED_TIPOS = {
@@ -17,8 +22,15 @@ ALLOWED_TIPOS = {
 
 
 class AccesoService:
-    def __init__(self, repo: AccesoRepository):
+    def __init__(
+        self,
+        repo: AccesoRepository,
+        image_storage: LocalManualAccessImageStorage | None = None,
+        face_compare_image_storage: LocalFaceCompareImageStorage | None = None,
+    ):
         self.repo = repo
+        self.image_storage = image_storage or LocalManualAccessImageStorage()
+        self.face_compare_image_storage = face_compare_image_storage or LocalFaceCompareImageStorage()
 
     def crear_acceso_manual_extraordinario(
         self,
@@ -29,6 +41,9 @@ class AccesoService:
         persona_guardia_fk: int | None,
         persona_residente_autoriza_fk: int | None,
         placa: str | None,
+        image_bytes: bytes,
+        image_content_type: str | None,
+        image_filename: str | None,
         usuario_creado: str | None,
     ) -> GeneralResponse[dict]:
         normalized_motivo = (motivo or "").strip()
@@ -72,6 +87,13 @@ class AccesoService:
                 ),
             )
 
+        if not image_bytes:
+            return GeneralResponse(
+                success=False,
+                message="Imagen es requerida",
+                error=ErrorDTO(code="MISSING_IMAGE", message="Imagen es requerida"),
+            )
+
         placa_detectada = None
         raw_placa = (placa or "").strip()
         if raw_placa:
@@ -87,7 +109,29 @@ class AccesoService:
                     ),
                 )
 
-        observacion = (detalle or "").strip() or None
+        try:
+            evidencia_path = self.image_storage.save(
+                image_bytes=image_bytes,
+                content_type=image_content_type,
+                original_filename=image_filename,
+            )
+        except Exception as exc:
+            return GeneralResponse(
+                success=False,
+                message="No se pudo guardar la imagen",
+                error=ErrorDTO(
+                    code="IMAGE_SAVE_ERROR",
+                    message="No se pudo guardar la imagen",
+                    details={"error": str(exc)},
+                ),
+            )
+
+        observacion_parts = []
+        normalized_detalle = (detalle or "").strip()
+        if normalized_detalle:
+            observacion_parts.append(normalized_detalle)
+        observacion_parts.append(f"evidencia={evidencia_path}")
+        observacion = " | ".join(observacion_parts)
         record = self.repo.create_acceso(
             tipo="manual_guardia",
             vivienda_visita_fk=int(vivienda_visita_fk),
@@ -119,6 +163,7 @@ class AccesoService:
                 "placaDetectada": record["placa_detectada"],
                 "personaGuardiaFk": record["persona_guardia_fk"],
                 "personaResidenteAutorizaFk": record["persona_residente_autoriza_fk"],
+                "evidenciaImagenPath": evidencia_path,
                 "observacion": record["observacion"],
                 "fechaCreado": record["fecha_creado"],
                 "usuarioCreado": record["usuario_creado"],
@@ -131,6 +176,7 @@ class AccesoService:
         vivienda_visita_fk: int,
         motivo: str,
         visitor_name: str | None,
+        foto_rostro_vivo_base64: str | None,
     ) -> GeneralResponse[dict]:
         tipo = "visita_sin_qr"
         usuario = "system"
@@ -176,6 +222,34 @@ class AccesoService:
         supports_pending = self.repo.supports_resultado_pendiente()
         resultado_inicial = "pendiente" if supports_pending else "no_autorizado"
         motivo_inicial = normalized_motivo
+        normalized_base64 = (foto_rostro_vivo_base64 or "").strip()
+        if normalized_base64:
+            try:
+                image_bytes = self._decode_base64(normalized_base64)
+            except ValueError:
+                return GeneralResponse(
+                    success=False,
+                    message="Base64 invalido",
+                    error=ErrorDTO(code="INVALID_BASE64", message="Base64 invalido"),
+                )
+
+            try:
+                live_image_path = self.face_compare_image_storage.save_live_image(image_bytes)
+            except Exception as exc:
+                return GeneralResponse(
+                    success=False,
+                    message="No se pudo guardar la imagen",
+                    error=ErrorDTO(
+                        code="IMAGE_SAVE_ERROR",
+                        message="No se pudo guardar la imagen",
+                        details={"error": str(exc)},
+                    ),
+                )
+
+            observacion = self._merge_observacion(
+                observacion=observacion,
+                updates={"faceCompareImage": live_image_path},
+            )
 
         record = self.repo.create_acceso(
             tipo=normalized_tipo,
@@ -202,6 +276,7 @@ class AccesoService:
             "motivo": record["motivo"],
             "tipo": record["tipo"],
             "viviendaPk": record["vivienda_visita_fk"],
+            "faceCompareImagePath": self._parse_observacion(record.get("observacion")).get("faceCompareImage"),
             "schemaSupportsPendiente": supports_pending,
         }
         return GeneralResponse(success=True, message="Acceso creado en estado pendiente", data=data)
@@ -304,12 +379,26 @@ class AccesoService:
                 ),
             )
 
-        note_parts = [f"decision_twilio={normalized_decision}"]
-        if digit:
-            note_parts.append(f"digit={digit}")
-        if call_sid:
-            note_parts.append(f"callSid={call_sid}")
-        observacion = " | ".join(note_parts)
+        acceso = self.repo.get_by_id(acceso_pk)
+        if not acceso:
+            return GeneralResponse(
+                success=False,
+                message="No se encontro acceso para actualizar",
+                error=ErrorDTO(
+                    code="ACCESS_NOT_FOUND",
+                    message="No se encontro acceso para actualizar",
+                    details={"accesoPk": acceso_pk},
+                ),
+            )
+
+        observacion = self._merge_observacion(
+            observacion=acceso.get("observacion"),
+            updates={
+                "decision_twilio": normalized_decision,
+                "digit": digit,
+                "callSid": call_sid,
+            },
+        )
 
         updated = self.repo.update_resultado(
             acceso_pk=acceso_pk,
@@ -338,6 +427,58 @@ class AccesoService:
                 "resultado": updated["resultado"],
                 "observacion": updated["observacion"],
                 "fechaActualizado": updated["fecha_actualizado"],
+            },
+        )
+
+    def registrar_evidencia_face_compare(
+        self,
+        *,
+        acceso_pk: int,
+        image_path: str,
+        usuario_actualizado: str | None = None,
+    ) -> GeneralResponse[dict]:
+        normalized_path = (image_path or "").strip()
+        if not normalized_path:
+            return GeneralResponse(
+                success=False,
+                message="Ruta de imagen es requerida",
+                error=ErrorDTO(code="MISSING_IMAGE_PATH", message="Ruta de imagen es requerida"),
+            )
+
+        acceso = self.repo.get_by_id(acceso_pk)
+        if not acceso:
+            return GeneralResponse(
+                success=False,
+                message="Acceso no existe",
+                error=ErrorDTO(code="NOT_FOUND", message="Acceso no existe", details={"accesoPk": acceso_pk}),
+            )
+
+        observacion = self._merge_observacion(
+            observacion=acceso.get("observacion"),
+            updates={"faceCompareImage": normalized_path},
+        )
+        updated = self.repo.update_observacion(
+            acceso_pk=acceso_pk,
+            observacion=observacion,
+            usuario_actualizado=(usuario_actualizado or "face_compare"),
+        )
+        if not updated:
+            self.repo.db.rollback()
+            return GeneralResponse(
+                success=False,
+                message="Acceso no existe",
+                error=ErrorDTO(code="NOT_FOUND", message="Acceso no existe", details={"accesoPk": acceso_pk}),
+            )
+
+        self.repo.db.commit()
+        return GeneralResponse(
+            success=True,
+            message="Evidencia de face compare registrada",
+            data={
+                "accesoPk": updated["acceso_pk"],
+                "faceCompareImage": normalized_path,
+                "fechaActualizado": updated["fecha_actualizado"],
+                "usuarioActualizado": updated["usuario_actualizado"],
             },
         )
 
@@ -477,3 +618,63 @@ class AccesoService:
             if key:
                 data[key] = value
         return data
+
+    @staticmethod
+    def _merge_observacion(
+        *,
+        observacion: str | None,
+        updates: dict[str, str | None],
+    ) -> str | None:
+        parts = [part.strip() for part in str(observacion).split("|") if part.strip()] if observacion else []
+        free_parts: list[str] = []
+        keyed_parts: dict[str, str] = {}
+        keyed_order: list[str] = []
+
+        for part in parts:
+            if "=" not in part:
+                free_parts.append(part)
+                continue
+            key, value = part.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if not key:
+                free_parts.append(part)
+                continue
+            if key not in keyed_order:
+                keyed_order.append(key)
+            keyed_parts[key] = value
+
+        for key, value in updates.items():
+            clean_key = (key or "").strip()
+            if not clean_key:
+                continue
+
+            if value is None:
+                keyed_parts.pop(clean_key, None)
+                if clean_key in keyed_order:
+                    keyed_order.remove(clean_key)
+                continue
+
+            clean_value = str(value).strip()
+            if not clean_value:
+                keyed_parts.pop(clean_key, None)
+                if clean_key in keyed_order:
+                    keyed_order.remove(clean_key)
+                continue
+
+            if clean_key not in keyed_order:
+                keyed_order.append(clean_key)
+            keyed_parts[clean_key] = clean_value
+
+        merged_parts = [*free_parts, *[f"{key}={keyed_parts[key]}" for key in keyed_order if key in keyed_parts]]
+        return " | ".join(merged_parts) or None
+
+    @staticmethod
+    def _decode_base64(value: str) -> bytes:
+        raw = value.strip()
+        if raw.lower().startswith("data:") and "," in raw:
+            raw = raw.split(",", 1)[1]
+        try:
+            return base64.b64decode(raw, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("invalid base64") from exc

@@ -5,11 +5,15 @@ import logging
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_db
 from app.application.dtos.responses.general_response import GeneralResponse, ErrorDTO
+from app.application.services.acceso_service import AccesoService
 from app.application.services.face_compare_service import FaceCompareService
 from app.application.services.face_service import FaceService
 from app.application.services.ocr_service import OcrService
+from app.infrastructure.acceso_repository import AccesoRepository
 from app.infrastructure.face_compare_adapter import MockFaceCompareAdapter
 from app.infrastructure.face_adapter import OpenCvFaceAdapter
 from app.infrastructure.ocr_adapter import EasyOcrAdapter
@@ -56,7 +60,12 @@ def get_face_compare_service() -> FaceCompareService:
     return FaceCompareService(port=MockFaceCompareAdapter(match=_FACE_COMPARE_FORCE_MATCH))
 
 
+def get_acceso_service(db: Session = Depends(get_db)) -> AccesoService:
+    return AccesoService(repo=AccesoRepository(db))
+
+
 class FaceCompareRequest(BaseModel):
+    accesoPk: int | None = None
     foto_cedula_base64: str
     foto_rostro_vivo_base64: str
 
@@ -180,9 +189,11 @@ async def extract_foto(file: UploadFile = File(...), service: FaceService = Depe
 async def compare_faces(
     payload: FaceCompareRequest,
     service: FaceCompareService = Depends(get_face_compare_service),
+    acceso_service: AccesoService = Depends(get_acceso_service),
 ):
     logger.info(
-        "compare_faces_request cedula_base64_len=%s vivo_base64_len=%s",
+        "compare_faces_request acceso_pk=%s cedula_base64_len=%s vivo_base64_len=%s",
+        payload.accesoPk,
         len(payload.foto_cedula_base64 or ""),
         len(payload.foto_rostro_vivo_base64 or ""),
     )
@@ -201,6 +212,25 @@ async def compare_faces(
 
     response = service.comparar(image_a, image_b)
     if response.success:
+        if payload.accesoPk is not None:
+            response_data = response.data or {}
+            live_image_path = response_data.get("fotoRostroVivoPath")
+            link_response = acceso_service.registrar_evidencia_face_compare(
+                acceso_pk=payload.accesoPk,
+                image_path=live_image_path or "",
+            )
+            if not link_response.success:
+                status_code = status.HTTP_400_BAD_REQUEST
+                if link_response.error and link_response.error.code == "NOT_FOUND":
+                    status_code = status.HTTP_404_NOT_FOUND
+                logger.warning(
+                    "compare_faces_response status=%s acceso_link_payload=%s compare_payload=%s",
+                    status_code,
+                    _sanitize_for_log(link_response),
+                    _sanitize_for_log(response),
+                )
+                return JSONResponse(status_code=status_code, content=link_response.model_dump())
+
         logger.info("compare_faces_response status=200 payload=%s", _sanitize_for_log(response))
         return response
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
