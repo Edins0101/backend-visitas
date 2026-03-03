@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from typing import Optional
 from dotenv import load_dotenv
 
 # Ensure Paddle uses legacy executor (avoid oneDNN/PIR crashes on some Windows builds)
@@ -12,6 +13,7 @@ os.environ.setdefault("FLAGS_enable_pir_api", "0")
 load_dotenv()
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.routers.twilio import router as twilio_router
 from app.api.routers.ocr import router as ocr_router
 from app.api.routers.qr import router as qr_router
@@ -33,6 +35,29 @@ logger = logging.getLogger("app.http")
 
 
 app = FastAPI()
+
+
+def _parse_cors_allowed_origins(raw: Optional[str]) -> list[str]:
+    if not raw:
+        return ["*"]
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or ["*"]
+
+
+allowed_origins = _parse_cors_allowed_origins(os.getenv("CORS_ALLOWED_ORIGINS"))
+allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
+
+if allow_credentials and "*" in allowed_origins:
+    logger.warning("CORS_ALLOW_CREDENTIALS=true is incompatible with wildcard origins. Falling back to false.")
+    allow_credentials = False
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")

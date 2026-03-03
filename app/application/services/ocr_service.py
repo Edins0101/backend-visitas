@@ -89,14 +89,11 @@ class OcrService:
                 error=ErrorDTO(code="EMPTY_IMAGE", message="Imagen vacia"),
             )
 
-        try:
-            result = self.port.extract_text(image_bytes, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
-        except Exception as exc:
-            return GeneralResponse(
-                success=False,
-                message="Fallo al procesar OCR",
-                error=ErrorDTO(code="OCR_ERROR", message="Fallo al procesar OCR", details={"error": str(exc)}),
-            )
+        result, ocr_error = self._run_ocr_for_placa(image_bytes, self.port)
+        if ocr_error and self.fallback_port is not None:
+            result, ocr_error = self._run_ocr_for_placa(image_bytes, self.fallback_port)
+        if ocr_error:
+            return ocr_error
 
         placa = None
         best_conf = -1.0
@@ -123,6 +120,17 @@ class OcrService:
             message="Placa procesada",
             data={"placa": placa},
         )
+
+    def _run_ocr_for_placa(self, image_bytes: bytes, port: OcrPort):
+        try:
+            result = port.extract_text(image_bytes, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+        except Exception as exc:
+            return None, GeneralResponse(
+                success=False,
+                message="Fallo al procesar OCR",
+                error=ErrorDTO(code="OCR_ERROR", message="Fallo al procesar OCR", details={"error": str(exc)}),
+            )
+        return result, None
 
     def _run_ocr_for_cedula(self, image_bytes: bytes, port: OcrPort):
         try:

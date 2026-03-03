@@ -13,7 +13,9 @@ def extraer_placa(texto: str) -> Optional[str]:
     numeros = _normalizar(match.group(2))
     letras = "".join(_DIGIT_TO_LETTER.get(ch, ch) for ch in letras)
     numeros = "".join(_LETTER_TO_DIGIT.get(ch, ch) for ch in numeros)
-    if len(numeros) < 3:
+    if len(letras) != 3 or not letras.isalpha():
+        return None
+    if len(numeros) not in {3, 4} or not numeros.isdigit():
         return None
     return f"{letras}-{numeros}"
 
