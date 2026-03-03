@@ -7,6 +7,36 @@ class AccesoRepository:
     def __init__(self, db):
         self.db = db
 
+    def exists_vivienda(self, vivienda_pk: int) -> bool:
+        value = self.db.execute(
+            text(
+                """
+                SELECT 1
+                FROM vivienda
+                WHERE vivienda_pk = :vivienda_pk
+                  AND eliminado = FALSE
+                LIMIT 1
+                """
+            ),
+            {"vivienda_pk": vivienda_pk},
+        ).scalar()
+        return value is not None
+
+    def exists_persona(self, persona_pk: int) -> bool:
+        value = self.db.execute(
+            text(
+                """
+                SELECT 1
+                FROM persona
+                WHERE persona_pk = :persona_pk
+                  AND eliminado = FALSE
+                LIMIT 1
+                """
+            ),
+            {"persona_pk": persona_pk},
+        ).scalar()
+        return value is not None
+
     def supports_resultado_pendiente(self) -> bool:
         row = self.db.execute(
             text(
@@ -270,6 +300,53 @@ class AccesoRepository:
                 "acceso_pk": acceso_pk,
                 "resultado": resultado,
                 "observacion": observacion,
+                "usuario_actualizado": usuario_actualizado,
+            },
+        ).mappings().first()
+
+        return dict(row) if row else None
+
+    def update_placa_detectada(
+        self,
+        *,
+        acceso_pk: int,
+        placa_detectada: str,
+        usuario_actualizado: str,
+    ) -> dict | None:
+        row = self.db.execute(
+            text(
+                """
+                UPDATE acceso
+                SET placa_detectada = :placa_detectada,
+                    fecha_actualizado = NOW(),
+                    usuario_actualizado = :usuario_actualizado
+                WHERE acceso_pk = :acceso_pk
+                  AND eliminado = FALSE
+                RETURNING
+                    acceso_pk,
+                    tipo,
+                    vivienda_visita_fk,
+                    resultado,
+                    motivo,
+                    persona_guardia_fk,
+                    persona_residente_autoriza_fk,
+                    visita_ingreso_fk,
+                    vehiculo_ingreso_fk,
+                    placa_detectada,
+                    biometria_ok,
+                    placa_ok,
+                    intentos,
+                    observacion,
+                    eliminado,
+                    fecha_creado,
+                    usuario_creado,
+                    fecha_actualizado,
+                    usuario_actualizado
+                """
+            ),
+            {
+                "acceso_pk": acceso_pk,
+                "placa_detectada": placa_detectada,
                 "usuario_actualizado": usuario_actualizado,
             },
         ).mappings().first()

@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.application.dtos.requests.acceso_create_request import AccesoCreateRequestDTO
+from app.application.dtos.requests.acceso_manual_create_request import AccesoManualCreateRequestDTO
 from app.application.dtos.requests.acceso_start_call_request import AccesoStartCallRequestDTO
 from app.application.dtos.requests.acceso_twilio_decision_request import AccesoTwilioDecisionRequestDTO
+from app.application.dtos.requests.acceso_update_placa_request import AccesoUpdatePlacaRequestDTO
 from app.application.services.acceso_service import AccesoService
 from app.application.services.twilio_service import TwilioService
 from app.infrastructure.acceso_repository import AccesoRepository
@@ -65,6 +67,41 @@ def crear_acceso_pendiente(payload: AccesoCreateRequestDTO, service: AccesoServi
     if code in {"RESIDENT_NOT_FOUND", "NOT_FOUND"}:
         status_code = status.HTTP_404_NOT_FOUND
     logger.warning("crear_acceso_response status=%s payload=%s", status_code, _as_loggable_payload(response))
+    return JSONResponse(status_code=status_code, content=response.model_dump())
+
+
+@router.post("/manual")
+def crear_acceso_manual_extraordinario(
+    payload: AccesoManualCreateRequestDTO,
+    service: AccesoService = Depends(get_acceso_service),
+):
+    logger.info(
+        "crear_acceso_manual_request vivienda_visita_fk=%s motivo=%s guardia_fk=%s residente_fk=%s placa=%s",
+        payload.viviendaVisitaFk,
+        payload.motivo,
+        payload.personaGuardiaFk,
+        payload.personaResidenteAutorizaFk,
+        payload.placa,
+    )
+    response = service.crear_acceso_manual_extraordinario(
+        vivienda_visita_fk=payload.viviendaVisitaFk,
+        motivo=payload.motivo,
+        detalle=payload.detalle,
+        persona_guardia_fk=payload.personaGuardiaFk,
+        persona_residente_autoriza_fk=payload.personaResidenteAutorizaFk,
+        placa=payload.placa,
+        usuario_creado=payload.usuarioCreado,
+    )
+
+    if response.success:
+        logger.info("crear_acceso_manual_response status=200 payload=%s", _as_loggable_payload(response))
+        return response
+
+    code = response.error.code if response.error else None
+    status_code = status.HTTP_400_BAD_REQUEST
+    if code in {"VIVIENDA_NOT_FOUND", "GUARD_NOT_FOUND", "RESIDENT_AUTH_NOT_FOUND"}:
+        status_code = status.HTTP_404_NOT_FOUND
+    logger.warning("crear_acceso_manual_response status=%s payload=%s", status_code, _as_loggable_payload(response))
     return JSONResponse(status_code=status_code, content=response.model_dump())
 
 
@@ -150,3 +187,33 @@ def obtener_acceso(acceso_pk: int, service: AccesoService = Depends(get_acceso_s
 
     logger.warning("obtener_acceso_response status=404 payload=%s", _as_loggable_payload(response))
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=response.model_dump())
+
+
+@router.patch("/{acceso_pk}/placa")
+def actualizar_placa_acceso(
+    acceso_pk: int,
+    payload: AccesoUpdatePlacaRequestDTO,
+    service: AccesoService = Depends(get_acceso_service),
+):
+    logger.info(
+        "actualizar_placa_acceso_request acceso_pk=%s placa=%s usuario=%s",
+        acceso_pk,
+        payload.placa,
+        payload.usuarioActualizado,
+    )
+    response = service.actualizar_placa(
+        acceso_pk=acceso_pk,
+        placa=payload.placa,
+        usuario_actualizado=payload.usuarioActualizado,
+    )
+
+    if response.success:
+        logger.info("actualizar_placa_acceso_response status=200 payload=%s", _as_loggable_payload(response))
+        return response
+
+    code = response.error.code if response.error else None
+    status_code = status.HTTP_400_BAD_REQUEST
+    if code == "NOT_FOUND":
+        status_code = status.HTTP_404_NOT_FOUND
+    logger.warning("actualizar_placa_acceso_response status=%s payload=%s", status_code, _as_loggable_payload(response))
+    return JSONResponse(status_code=status_code, content=response.model_dump())

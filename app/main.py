@@ -19,6 +19,7 @@ from app.api.routers.ocr import router as ocr_router
 from app.api.routers.qr import router as qr_router
 from app.api.routers.catalogo import router as catalogo_router
 from app.api.routers.acceso import router as acceso_router
+from app.api.routers.reporte_acceso import router as reporte_acceso_router
 
 
 def _configure_logging() -> None:
@@ -100,3 +101,4 @@ app.include_router(ocr_router)
 app.include_router(catalogo_router)
 app.include_router(twilio_router)
 app.include_router(acceso_router)
+app.include_router(reporte_acceso_router)

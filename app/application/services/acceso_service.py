@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.application.dtos.responses.general_response import ErrorDTO, GeneralResponse
 from app.application.services.twilio_service import TwilioService
+from app.domain.placa import extraer_placa
 from app.infrastructure.acceso_repository import AccesoRepository
 
 
@@ -18,6 +19,111 @@ ALLOWED_TIPOS = {
 class AccesoService:
     def __init__(self, repo: AccesoRepository):
         self.repo = repo
+
+    def crear_acceso_manual_extraordinario(
+        self,
+        *,
+        vivienda_visita_fk: int,
+        motivo: str,
+        detalle: str | None,
+        persona_guardia_fk: int | None,
+        persona_residente_autoriza_fk: int | None,
+        placa: str | None,
+        usuario_creado: str | None,
+    ) -> GeneralResponse[dict]:
+        normalized_motivo = (motivo or "").strip()
+        if not normalized_motivo:
+            return GeneralResponse(
+                success=False,
+                message="Motivo es requerido",
+                error=ErrorDTO(code="MISSING_MOTIVO", message="Motivo es requerido"),
+            )
+
+        if not self.repo.exists_vivienda(int(vivienda_visita_fk)):
+            return GeneralResponse(
+                success=False,
+                message="Vivienda no existe",
+                error=ErrorDTO(
+                    code="VIVIENDA_NOT_FOUND",
+                    message="Vivienda no existe",
+                    details={"viviendaVisitaFk": vivienda_visita_fk},
+                ),
+            )
+
+        if persona_guardia_fk is not None and not self.repo.exists_persona(int(persona_guardia_fk)):
+            return GeneralResponse(
+                success=False,
+                message="Guardia no existe",
+                error=ErrorDTO(
+                    code="GUARD_NOT_FOUND",
+                    message="Guardia no existe",
+                    details={"personaGuardiaFk": persona_guardia_fk},
+                ),
+            )
+
+        if persona_residente_autoriza_fk is not None and not self.repo.exists_persona(int(persona_residente_autoriza_fk)):
+            return GeneralResponse(
+                success=False,
+                message="Residente autorizador no existe",
+                error=ErrorDTO(
+                    code="RESIDENT_AUTH_NOT_FOUND",
+                    message="Residente autorizador no existe",
+                    details={"personaResidenteAutorizaFk": persona_residente_autoriza_fk},
+                ),
+            )
+
+        placa_detectada = None
+        raw_placa = (placa or "").strip()
+        if raw_placa:
+            placa_detectada = extraer_placa(raw_placa)
+            if not placa_detectada:
+                return GeneralResponse(
+                    success=False,
+                    message="Formato de placa invalido",
+                    error=ErrorDTO(
+                        code="INVALID_PLACA",
+                        message="Formato de placa invalido",
+                        details={"received": raw_placa, "expected": ["ABC-123", "GVC-1233"]},
+                    ),
+                )
+
+        observacion = (detalle or "").strip() or None
+        record = self.repo.create_acceso(
+            tipo="manual_guardia",
+            vivienda_visita_fk=int(vivienda_visita_fk),
+            resultado="autorizado",
+            motivo=normalized_motivo,
+            persona_guardia_fk=int(persona_guardia_fk) if persona_guardia_fk is not None else None,
+            persona_residente_autoriza_fk=(
+                int(persona_residente_autoriza_fk) if persona_residente_autoriza_fk is not None else None
+            ),
+            visita_ingreso_fk=None,
+            vehiculo_ingreso_fk=None,
+            placa_detectada=placa_detectada,
+            biometria_ok=None,
+            placa_ok=None,
+            observacion=observacion,
+            usuario_creado=(usuario_creado or "guardia"),
+        )
+        self.repo.db.commit()
+
+        return GeneralResponse(
+            success=True,
+            message="Acceso manual extraordinario registrado",
+            data={
+                "accesoPk": record["acceso_pk"],
+                "tipo": record["tipo"],
+                "resultado": record["resultado"],
+                "motivo": record["motivo"],
+                "viviendaPk": record["vivienda_visita_fk"],
+                "placaDetectada": record["placa_detectada"],
+                "personaGuardiaFk": record["persona_guardia_fk"],
+                "personaResidenteAutorizaFk": record["persona_residente_autoriza_fk"],
+                "observacion": record["observacion"],
+                "fechaCreado": record["fecha_creado"],
+                "usuarioCreado": record["usuario_creado"],
+            },
+        )
 
     def crear_acceso_pendiente(
         self,
@@ -284,6 +390,58 @@ class AccesoService:
                 error=ErrorDTO(code="NOT_FOUND", message="Acceso no existe", details={"accesoPk": acceso_pk}),
             )
         return GeneralResponse(success=True, message="Acceso encontrado", data=record)
+
+    def actualizar_placa(
+        self,
+        *,
+        acceso_pk: int,
+        placa: str,
+        usuario_actualizado: str | None = None,
+    ) -> GeneralResponse[dict]:
+        raw_placa = (placa or "").strip()
+        if not raw_placa:
+            return GeneralResponse(
+                success=False,
+                message="Placa es requerida",
+                error=ErrorDTO(code="MISSING_PLACA", message="Placa es requerida"),
+            )
+
+        placa_normalizada = extraer_placa(raw_placa)
+        if not placa_normalizada:
+            return GeneralResponse(
+                success=False,
+                message="Formato de placa invalido",
+                error=ErrorDTO(
+                    code="INVALID_PLACA",
+                    message="Formato de placa invalido",
+                    details={"received": raw_placa, "expected": ["ABC-123", "GVC-1233"]},
+                ),
+            )
+
+        updated = self.repo.update_placa_detectada(
+            acceso_pk=acceso_pk,
+            placa_detectada=placa_normalizada,
+            usuario_actualizado=(usuario_actualizado or "system"),
+        )
+        if not updated:
+            self.repo.db.rollback()
+            return GeneralResponse(
+                success=False,
+                message="Acceso no existe",
+                error=ErrorDTO(code="NOT_FOUND", message="Acceso no existe", details={"accesoPk": acceso_pk}),
+            )
+
+        self.repo.db.commit()
+        return GeneralResponse(
+            success=True,
+            message="Placa actualizada",
+            data={
+                "accesoPk": updated["acceso_pk"],
+                "placaDetectada": updated["placa_detectada"],
+                "fechaActualizado": updated["fecha_actualizado"],
+                "usuarioActualizado": updated["usuario_actualizado"],
+            },
+        )
 
     @staticmethod
     def _normalizar_celular_ecuador(celular: str | None) -> str | None:
